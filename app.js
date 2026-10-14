@@ -219,9 +219,9 @@ function bacHTML(c){bacLast=c;const W=BAC_W,H=BAC_H,t1=c.zeroAt||c.pts[c.pts.len
         <path d="${d}" class="bacline" clip-path="url(#bacpast)" vector-effect="non-scaling-stroke"/>
         <path d="${d}" class="bacline fut" clip-path="url(#bacfut)" vector-effect="non-scaling-stroke"/>
         <line x1="${nx}" x2="${nx}" y1="${BAC_T-6}" y2="${base}" class="bacnow" vector-effect="non-scaling-stroke"/></svg>
-      <span class="bacpk" style="left:${r1(px/W*100)}%;top:${r1(py/H*100)}%"></span>
+      <span class="bacpk" style="left:${r1(px/W*100)}%;top:calc(${r1(py/H*100)} * var(--bach) / 100)"></span>
       <span class="bacpkl num" style="left:${r1(Math.min(88,Math.max(12,px/W*100)))}%">Peak ${c.peak.v.toFixed(3)}%</span>
-      <span class="bacme" style="left:${r1(nx/W*100)}%;top:${r1(Y(c.now)/H*100)}%"></span>
+      <span class="bacme" style="left:${r1(nx/W*100)}%;top:calc(${r1(Y(c.now)/H*100)} * var(--bach) / 100)"></span>
       <div class="bacx" hidden></div><div class="bacdot" hidden></div><div class="bactip num" hidden aria-live="polite"></div>
       <div class="bacaxis num"><span>${clock(c.t0)}</span><span>${clock(mid)}</span><span>${clock(t1)}</span></div></div></div>
     <p class="help">Rough Widmark estimate from your weight, body type and drink times. Food, pace, medications and your own body change real BAC a lot. Never use this to decide whether to drive. The faded part is projected. <button type="button" class="link" data-act="sources">How it's calculated</button></p></section>`}
