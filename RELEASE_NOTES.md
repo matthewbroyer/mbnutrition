@@ -2,6 +2,13 @@
 
 Newest first. One entry per release, in plain words a user would understand.
 
+## 1.6 · 2026-10-14
+
+- The Week charts are easier to read: light gridlines with values on the side, a labelled target line, short day names (Thu, Fri…) instead of single letters, and rounded bars. While you read one bar, the others fade back.
+- The BAC chart shows its scale (0.02%, 0.04%…) along the gridlines.
+- Links inside dialogs, like "Open Food Facts" on a brand product, now use the app's green instead of the browser's default blue.
+- On phones, the line under "Today" (date, items logged, calories) wraps between its parts instead of in the middle of one.
+
 ## 1.5 · 2026-10-14
 
 - Editing a log entry now ends with a "Your library" choice: change only this entry, also update the saved food or drink, or save it as a new one in your library.

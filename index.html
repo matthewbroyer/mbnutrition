@@ -17,10 +17,10 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <script>(function(){var t=null;try{t=localStorage.getItem('mbnutrition.theme')}catch(e){}document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light')})();</script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"mbnutrition.online","alternateName":"Nutrition","url":"https://mbnutrition.online/","description":"Free calorie, macro and hydration tracker with about 7,800 foods. Log in a tap, set personal targets, track fasting and supplements. No account needed.","applicationCategory":"HealthApplication","operatingSystem":"Any (runs in a web browser)","browserRequirements":"Requires JavaScript","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Matthew Broyer","url":"https://matthewbroyer.com/"}}</script>
-<link rel="stylesheet" href="mb-suite-core.css?v=1.5">
-<link rel="stylesheet" href="mb-suite-cutouts.css?v=1.5">
-<link rel="stylesheet" href="mb-suite-sidebar.css?v=1.5">
-<link rel="stylesheet" href="mb-suite-v3.css?v=1.5">
+<link rel="stylesheet" href="mb-suite-core.css?v=1.6">
+<link rel="stylesheet" href="mb-suite-cutouts.css?v=1.6">
+<link rel="stylesheet" href="mb-suite-sidebar.css?v=1.6">
+<link rel="stylesheet" href="mb-suite-v3.css?v=1.6">
 <style>
 /* ===== mbnutrition.online · app styles on MB Suite tokens (accent: Avocado) =====
    Data colors (app-specific, always paired with a text label): protein = red, carbs = blue, fat = gold (shared with mbmealprep), drinks = water blue.
@@ -198,13 +198,26 @@ details.qa[open]{padding-bottom:12px}
 .star[aria-pressed="true"]{color:var(--warn)}
 .tag{font-size:10.5px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;background:var(--surface-3);padding:1px 6px;border-radius:3px;margin-left:6px;vertical-align:1px;color:var(--ink-2)}
 /* ---- week ---- */
-.week{position:relative;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;align-items:end;height:150px;padding-top:6px}
-.wcol{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px;height:100%;min-width:0}
-.wbar{width:66%;max-width:34px;border-radius:2px 2px 0 0;min-height:2px;transition:height .35s ease}
-.wcol small{font-size:11px;color:var(--muted);font-weight:600}
+.wchart{position:relative;padding-left:46px}
+.wgrid{position:absolute;left:46px;right:0;top:0;height:132px;pointer-events:none}
+.wg,.wt{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--border)}
+.wg.w0{border-top-color:var(--border-strong)}
+.wg em,.wt em{position:absolute;right:calc(100% + 8px);top:0;transform:translateY(-50%);font-style:normal;font-size:10.5px;line-height:1;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.wt{border-top:1.5px dashed var(--ink-2);opacity:.75;z-index:2}
+.wt em{color:var(--ink);font-weight:700}
+.week{position:relative;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.wcol{display:grid;grid-template-rows:132px auto;justify-items:center;min-width:0}
+.wtrack{display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%}
+.wbar{display:block;width:64%;max-width:36px;border-radius:4px 4px 0 0;min-height:2px}
+.wcol small{font-size:11px;color:var(--muted);font-weight:600;padding-top:7px;line-height:1.1}
 .wcol.cur small{color:var(--ink);font-weight:700}
-.tline{position:absolute;left:0;right:0;border-top:2px dashed var(--border-strong);pointer-events:none}
-.tline span{position:absolute;right:0;top:-18px;font-size:10.5px;font-weight:650;color:var(--muted)}
+.week:has(.wcol.tipon) .wcol:not(.tipon) .wbar{opacity:.45}
+.wlegend{display:flex;align-items:center;gap:6px;margin:10px 0 0;font-size:11.5px;color:var(--muted)}
+.wlegend i{width:16px;border-top:1.5px dashed var(--ink-2)}
+.bacyl{position:absolute;right:0;transform:translateY(-100%);padding-bottom:2px;font-size:10px;line-height:1;color:var(--muted);pointer-events:none}
+.cu-s .nw{white-space:nowrap}
+.help a{color:var(--accent);font-weight:600;text-underline-offset:2px}
+.help a:hover{color:var(--accent-hover)}
 .insights{display:grid;gap:6px;margin:0;padding:0;list-style:none}
 .insights li{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;font-size:13.5px;line-height:1.4}
 .src{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--border);font-size:13.5px}
@@ -255,7 +268,7 @@ fieldset.libsave legend{font-size:11px;font-weight:650;text-transform:uppercase;
 .mtip.tipon .bar{box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 25%,transparent)}
 .ring.tipon,.glass.tipon{filter:drop-shadow(0 0 6px color-mix(in srgb,var(--accent) 35%,transparent))}
 button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border-radius:6px}
-.wcol .wbar{transition:height .35s ease,filter .15s,transform .15s;transform-origin:bottom}
+.wcol .wbar{transition:height .35s ease,filter .15s,transform .15s,opacity .15s;transform-origin:bottom}
 .wcol:hover .wbar,.wcol.tipon .wbar{filter:brightness(1.12) saturate(1.1);transform:scaleX(1.08)}
 /* web search panel in New food / New drink */
 .offp{margin:0 0 12px}
@@ -366,7 +379,7 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 .welcome .themepick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
 @media print{.fab,.toast,.dmenu{display:none!important}}
 </style>
-<link rel="stylesheet" href="mb-suite-topbar.css?v=1.5">
+<link rel="stylesheet" href="mb-suite-topbar.css?v=1.6">
 
 <!-- release tags added by mb-release 2026-10-14 -->
 <link rel="canonical" href="https://mbnutrition.online/">
@@ -408,7 +421,7 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 </svg>
 
 <aside class="mb-side" aria-label="App">
-  <a class="brand" href="./" data-home aria-label="mbnutrition.online: go to Today"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g1" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c1"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c1)"><rect width="64" height="64" fill="url(#mbnu-g1)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>mbnutrition<i class="tld">.online</i></b><span>Official Web App · v1.5</span></span></a>
+  <a class="brand" href="./" data-home aria-label="mbnutrition.online: go to Today"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g1" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c1"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c1)"><rect width="64" height="64" fill="url(#mbnu-g1)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>mbnutrition<i class="tld">.online</i></b><span>Official Web App · v1.6</span></span></a>
   <nav class="side-nav" aria-label="Sections">
     <button type="button" data-act="tab" data-v="today"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-today"/></svg><span>Today</span></button>
     <button type="button" data-act="tab" data-v="library"><svg class="uic" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-library"/></svg><span>Library</span></button>
@@ -422,7 +435,7 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 
 <div class="mb-main">
   <header class="page-bar">
-    <a class="brand phone-brand" href="./" data-home aria-label="mbnutrition.online: go to Today"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g2" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c2"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c2)"><rect width="64" height="64" fill="url(#mbnu-g2)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>mbnutrition<i class="tld">.online</i></b><span>Official Web App · v1.5</span></span></a>
+    <a class="brand phone-brand" href="./" data-home aria-label="mbnutrition.online: go to Today"><span class="logo"><svg aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="mbnu-g2" gradientUnits="userSpaceOnUse" x1="10" y1="0" x2="54" y2="64"><stop offset="0" stop-color="#7bb02f"/><stop offset=".55" stop-color="#65A30D"/><stop offset="1" stop-color="#51820a"/></linearGradient><clipPath id="mbnu-c2"><rect width="64" height="64" rx="18"/></clipPath></defs><g clip-path="url(#mbnu-c2)"><rect width="64" height="64" fill="url(#mbnu-g2)"/><path d="M32 15 C37 15 39.5 19 40.5 23.5 C41.5 28 45 31 45 37 A13 13 0 0 1 19 37 C19 31 22.5 28 23.5 23.5 C24.5 19 27 15 32 15Z" fill="#fff" fill-opacity=".3" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="32" cy="37" r="6.5" fill="#F6C860"/></g></svg></span><span class="bt"><b>mbnutrition<i class="tld">.online</i></b><span>Official Web App · v1.6</span></span></a>
     <h1 class="page-title" id="pageTitle">Today</h1>
     <div class="actions">
       <button type="button" class="tb tb-search" id="searchBtn" data-act="add" aria-label="Search foods and drinks" aria-keyshortcuts="/"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-search"/></svg><span class="tb-lbl">Search…</span><kbd>/</kbd></button>
@@ -464,9 +477,9 @@ button.wcol{border:0;background:none;padding:0;font:inherit;color:inherit;border
 
 <template id="shareArt"><svg class="cu-art" viewBox="0 0 640 136" preserveAspectRatio="xMaxYMax slice" aria-hidden="true" focusable="false"><circle class="b" cx="600" cy="34" r="22"/><path class="s" d="M310 146 C405 92 595 92 690 146Z"/><path class="d" transform="translate(548 128) rotate(-68) scale(0.6)" d="M0 0 C 20 -34 66 -40 96 -6 C 70 28 22 34 0 0Z"/><path class="m" transform="translate(560 128) rotate(-118) scale(0.5)" d="M0 0 C 20 -34 66 -40 96 -6 C 70 28 22 34 0 0Z"/><circle class="n" cx="470" cy="104" r="30"/><path class="b" d="M472 105.7 L495.3 111.5 A24 24 0 0 1 481.8 127.6Z"/><path class="b" d="M469.5 106.6 L476.2 129.6 A24 24 0 0 1 455.4 126Z"/><path class="b" d="M467.6 104.9 L450.9 122.2 A24 24 0 0 1 443.7 102.4Z"/><path class="b" d="M468 102.3 L444.7 96.5 A24 24 0 0 1 458.2 80.4Z"/><path class="b" d="M470.5 101.4 L463.8 78.4 A24 24 0 0 1 484.6 82Z"/><path class="b" d="M472.4 103.1 L489.1 85.8 A24 24 0 0 1 496.3 105.6Z"/><circle class="s" cx="470" cy="104" r="3.6"/><circle class="m" cx="604" cy="118" r="22"/><circle class="r" cx="384" cy="50" r="6"/><path class="d" transform="translate(412 92) scale(0.6)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/><path class="m" transform="translate(380 116) scale(0.4)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/><path class="n" transform="translate(528 58) scale(0.5)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/><path class="d" transform="translate(498 34) scale(0.3)" d="M0 -26 C7 -15 18 -5 18 6 A18 18 0 0 1 -18 6 C-18 -5 -7 -15 0 -26Z"/></svg></template>
 
-<script src="mb-title.js?v=1.5"></script>
-<script src="mb-install.js?v=1.5"></script>
-<script src="mb-share.js?v=1.5"></script>
-<script src="app.js?v=1.5"></script>
+<script src="mb-title.js?v=1.6"></script>
+<script src="mb-install.js?v=1.6"></script>
+<script src="mb-share.js?v=1.6"></script>
+<script src="app.js?v=1.6"></script>
 </body>
 </html>

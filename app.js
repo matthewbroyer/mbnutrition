@@ -1,6 +1,6 @@
 "use strict";
 const KEY='mbnutrition.v1',OLD_KEYS=['mbcalories.v1','fuel.v1'], ML_OZ=29.5735;
-const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.5',released:'2026-10-14',firstYear:2026};
+const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.6',released:'2026-10-14',firstYear:2026};
 const THEME_KEY='mbnutrition.theme', SEEN_KEY='mbnutrition.seen', HANDLE_DB='mbnutrition.files';
 const $=s=>document.querySelector(s);
 const uid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5)};
@@ -202,7 +202,7 @@ const bacY=(v,mx,h=BAC_H)=>(BAC_T+(1-v/mx)*(BAC_H-BAC_T-BAC_B))/BAC_H*h;
 function bacHTML(c){bacLast=c;const W=BAC_W,H=BAC_H,t1=c.zeroAt||c.pts[c.pts.length-1][0],span=Math.max(1,t1-c.t0),mx=Math.max(c.peak.v*1.05,0.01),now=Date.now();
   const X=t=>r1((t-c.t0)/span*W),Y=v=>r1(bacY(v,mx));
   const d='M'+c.pts.map(p=>X(p[0])+' '+Y(p[1])).join(' L'),nx=Math.min(W,Math.max(0,X(now))),base=H-BAC_B;
-  const px=X(c.peak.t),py=Y(c.peak.v),grid=[0.25,0.5,0.75].map(f=>Y(mx*f));
+  const px=X(c.peak.t),py=Y(c.peak.v),gv=niceTicks(mx),grid=gv.map(v=>Y(v)),dp=gv.some(v=>Math.round(v*1000)%10)?3:2;
   const mid=c.t0+span/2,rising=c.peak.t>now;
   return`<section class="card span2 bac" id="baccard" aria-label="Estimated blood alcohol">
     <h2><span>Estimated BAC · live</span><span class="bacbadge ${rising?'up':'down'}">${rising?'Rising':'Coming down'}</span></h2>
@@ -222,6 +222,7 @@ function bacHTML(c){bacLast=c;const W=BAC_W,H=BAC_H,t1=c.zeroAt||c.pts[c.pts.len
       <span class="bacpk" style="left:${r1(px/W*100)}%;top:calc(${r1(py/H*100)} * var(--bach) / 100)"></span>
       <span class="bacpkl num" style="left:${r1(Math.min(88,Math.max(12,px/W*100)))}%">Peak ${c.peak.v.toFixed(3)}%</span>
       <span class="bacme" style="left:${r1(nx/W*100)}%;top:calc(${r1(Y(c.now)/H*100)} * var(--bach) / 100)"></span>
+      ${gv.map((v,i)=>`<span class="bacyl num" aria-hidden="true" style="top:calc(${r1(grid[i]/H*100)} * var(--bach) / 100)">${v.toFixed(dp)}%</span>`).join('')}
       <div class="bacx" hidden></div><div class="bacdot" hidden></div><div class="bactip num" hidden aria-live="polite"></div>
       <div class="bacaxis num"><span>${clock(c.t0)}</span><span>${clock(mid)}</span><span>${clock(t1)}</span></div></div></div>
     <p class="help">Rough Widmark estimate from your weight, body type and drink times. Food, pace, medications and your own body change real BAC a lot. Never use this to decide whether to drive. The faded part is projected. <button type="button" class="link" data-act="sources">How it's calculated</button></p></section>`}
@@ -684,7 +685,7 @@ function sorted(arr){return[...arr].sort((a,b)=>(b.fav?1:0)-(a.fav?1:0)||us(b)-u
 const ICON=(n,sz=18)=>`<svg class="uic" width="${sz}" height="${sz}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-${n}"/></svg>`;
 const ART=()=>{const t=document.getElementById('shareArt');return t?t.innerHTML:''};
 function dayNav(){return`<div class="daynav" role="group" aria-label="Choose day"><button type="button" data-act="prev" aria-label="Previous day">${ICON('left')}</button><button type="button" class="lbl" data-act="today" aria-label="Go to today">${esc(prettyDate(cur))}</button><button type="button" data-act="next" aria-label="Next day">${ICON('right')}</button></div>`}
-function bannerHTML(title,sub){return`<section class="cu-banner">${ART()}<div class="cu-txt"><h2 class="cu-t">${esc(title)}</h2><p class="cu-s num">${esc(sub)}</p>${dayNav()}</div></section>`}
+function bannerHTML(title,sub){return`<section class="cu-banner">${ART()}<div class="cu-txt"><h2 class="cu-t">${esc(title)}</h2><p class="cu-s num">${String(sub).split(' · ').map((x,i,a)=>`<span class="nw">${esc(x)}${i<a.length-1?' ·':''}</span>`).join(' ')}</p>${dayNav()}</div></section>`}
 function todayHTML(){
   const s=S.settings,t=totals(cur),rem=s.kcal-t.kcal,over=rem<0,C=2*Math.PI*56;
   const ring=anim('ring',r1(C*(1-Math.min(1,t.kcal/(s.kcal||1)))));
@@ -788,13 +789,23 @@ function libraryHTML(){
     <p class="note">★ pins an item to the front of quick add. Unpinned items sort by how often you log them.</p>
   </section>`}
 
+/* gridline values for charts: steps of 1, 2, 2.5 or 5 × 10ⁿ, about three lines, all below the top of the scale */
+function niceTicks(max,n=3){if(!(max>0))return[];const raw=max/n,pw=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/pw,st=(f<=1?1:f<=2?2:f<=2.5?2.5:f<=5?5:10)*pw,out=[];
+  for(let v=st;v<max*0.97;v+=st)out.push(Math.round(v/st)*st);return out}
 function trendsHTML(){
   const s=S.settings,days=[...Array(7)].map((_,i)=>shift(cur,i-6)),ts=days.map(d=>({d,...totals(d)})),logged=ts.filter(x=>x.n>0);
   const avg=k=>logged.length?logged.reduce((a,x)=>a+x[k],0)/logged.length:0;
   const kMax=Math.max(s.kcal*1.25,...ts.map(x=>x.kcal)),hMax=Math.max(s.waterMl*1.25,...ts.map(x=>x.hyd));
-  const wd=d=>{const [y,m,dd]=d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString(undefined,{weekday:'narrow'})};
-  const bars=(k,max,target,grad)=>`<div class="week">${ts.map(x=>{const a=anim('w'+k+x.d,r1(x[k]/max*100));const val=k==='hyd'?fmtVol(x[k]):fmt(x[k])+' cal',full=(()=>{const [y,m,dd]=x.d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})})();const diff=x[k]-target,amt=k==='hyd'?fmtVol(Math.abs(diff)):fmt(Math.abs(diff))+' cal',cmp=!x.n?'Nothing logged':!(target>0)?'':Math.abs(diff)<1?'Right on target':amt+(diff>0?' over':' under')+' target';
-    return`<button type="button" class="wcol ${x.d===cur?'cur':''}" data-act="openDay" data-d="${x.d}" data-tip="${esc(val)}|${esc(full)}|${esc(cmp)}" aria-label="${esc(full)}: ${esc(val)}. ${esc(cmp)}. Open this day."><div class="wbar" style="height:${a.from}%;background:${grad}" data-to="${a.to}" data-prop="h"></div><small aria-hidden="true">${wd(x.d)}</small></button>`}).join('')}<div class="tline" style="bottom:calc(${r1(target/max*100)}% * (150 - 26) / 150 + 22px)"><span>target</span></div></div>`;
+  const wd=d=>{const [y,m,dd]=d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString('en-US',{weekday:'short'})};
+  /* week bar chart (suite chart rule): nice-number gridlines with axis labels, a labelled target line, rounded bars,
+     hover/tap/focus labels on every bar, the other bars dim while one is read */
+  const bars=(k,max,target,grad)=>{const hy=k==='hyd',ml=hy&&!isOz(),du=v=>hy?(ml?v/1000:v/ML_OZ):v,dmax=du(max);
+    const lab=v=>hy?(ml?(Math.round(v*10)/10)+' L':fmt(v)+' oz'):v>=1000?(Math.round(v/100)/10)+'k':fmt(v);
+    const pct=v=>r1(v/dmax*100),tPct=r1(target/max*100),tLab=hy?fmtVol(target):fmt(target)+' cal';
+    const ticks=niceTicks(dmax).filter(v=>Math.abs(pct(v)-tPct)>10);
+    const grid=`<div class="wgrid" aria-hidden="true"><i class="wg w0" style="bottom:0"><em>0</em></i>${ticks.map(v=>`<i class="wg" style="bottom:${pct(v)}%"><em>${lab(v)}</em></i>`).join('')}${target>0?`<i class="wt" style="bottom:${tPct}%"><em>${hy?lab(du(target)):lab(target)}</em></i>`:''}</div>`;
+    return`<div class="wchart">${grid}<div class="week">${ts.map(x=>{const a=anim('w'+k+x.d,r1(x[k]/max*100));const val=hy?fmtVol(x[k]):fmt(x[k])+' cal',full=(()=>{const [y,m,dd]=x.d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})})();const diff=x[k]-target,amt=hy?fmtVol(Math.abs(diff)):fmt(Math.abs(diff))+' cal',cmp=!x.n?'Nothing logged':!(target>0)?'':Math.abs(diff)<1?'Right on target':amt+(diff>0?' over':' under')+' target';
+    return`<button type="button" class="wcol ${x.d===cur?'cur':''}" data-act="openDay" data-d="${x.d}" data-tip="${esc(val)}|${esc(full)}|${esc(cmp)}" aria-label="${esc(full)}: ${esc(val)}. ${esc(cmp)}. Open this day."><span class="wtrack"><span class="wbar" style="height:${a.from}%;background:${grad}" data-to="${a.to}" data-prop="h"></span></span><small aria-hidden="true">${wd(x.d)}</small></button>`}).join('')}</div></div>${target>0?`<p class="wlegend"><i aria-hidden="true"></i>Target ${esc(tLab)}</p>`:''}`};
   const ins=[];const wk=ts.reduce((a,x)=>a+x.kcal,0),wd2=ts.reduce((a,x)=>a+x.dkcal,0);
   ins.push(`You logged ${logged.length} of 7 days.`);
   if(logged.length){const ak=avg('kcal'),diff=ak-s.kcal;
