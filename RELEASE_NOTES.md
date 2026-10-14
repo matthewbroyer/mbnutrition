@@ -2,6 +2,13 @@
 
 Newest first. One entry per release, in plain words a user would understand.
 
+## 1.1 · 2026-10-14
+
+- Food search understands everyday names now: "coke", "pepsi", "pop", "oj", "hot dog", "fries", "donut", "mac and cheese" and many more find the right foods. Plurals, small typos ("chiken", "brocoli") and half-typed words work too, and the most common pick (whole milk, a whole egg, brewed coffee) comes first.
+- The same smarter matching applies to your own saved foods and drinks.
+- The alcohol total on Today now reads "drinks" instead of an abbreviation. The CSV column is now alcohol_drinks.
+- The live BAC chart is interactive: hover, drag a finger along it, or focus it and use the arrow keys to read the estimate at any time. Times after now are marked as projected.
+
 ## 1.0 · 2026-10-14
 
 First release in the mb app family style. Earlier internal builds (service worker cache v5) had no version number on screen.

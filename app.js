@@ -1,6 +1,6 @@
 "use strict";
 const KEY='mbnutrition.v1',OLD_KEYS=['mbcalories.v1','fuel.v1'], ML_OZ=29.5735;
-const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.0',released:'2026-10-14',firstYear:2026};
+const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.1',released:'2026-10-14',firstYear:2026};
 const THEME_KEY='mbnutrition.theme', SEEN_KEY='mbnutrition.seen', HANDLE_DB='mbnutrition.files';
 const $=s=>document.querySelector(s);
 const uid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5)};
@@ -192,34 +192,127 @@ function bacSection(){const s=S.settings;if(!s.alcohol)return'';const c=bacCurve
   if(!s.weightKg){const ev=alcEvents();if(ev.length&&Date.now()-ev[ev.length-1].t<12*36e5)
     return`<section class="card span2 bac" id="baccard"><h2><span>Estimated BAC</span></h2><p class="empty" style="margin:0">Add your body weight in Settings to see a live BAC estimate.</p><div class="dayacts"><button type="button" class="btn" data-act="tab" data-v="settings">Add your weight</button></div></section>`}
   return''}
-function bacHTML(c){const W=320,H=70,t1=c.zeroAt||c.pts[c.pts.length-1][0],span=Math.max(1,t1-c.t0),mx=Math.max(c.peak.v,0.01);
+let bacLast=null,bacHoverT=null;
+function bacHTML(c){bacLast=c;const W=320,H=70,t1=c.zeroAt||c.pts[c.pts.length-1][0],span=Math.max(1,t1-c.t0),mx=Math.max(c.peak.v,0.01);
   const X=t=>r1((t-c.t0)/span*W),Y=v=>r1(H-4-(v/mx)*(H-10));
   const line=c.pts.map(p=>X(p[0])+','+Y(p[1])).join(' '),nx=Math.min(W,X(Date.now()));
   return`<section class="card span2 bac" id="baccard" aria-label="Estimated blood alcohol">
     <h2><span>Estimated BAC · live</span></h2>
     <div class="bacwrap"><div><div class="bignum bacnum num">${c.now.toFixed(3)}%</div>
       <div class="hydsub num">${c.peak.t>Date.now()?'Still rising · ':''}Peak ${c.peak.v.toFixed(3)}% at ${clock(c.peak.t)}${c.zeroAt?' · back to 0.000% around '+clock(c.zeroAt):''}</div></div>
+      <div class="bacplot" tabindex="0" role="img" aria-label="BAC estimate over time. Hover, drag or use the arrow keys to read the estimate at any time.">
       <svg class="bacspark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
         <polygon points="0,${H-4} ${line} ${X(t1)},${H-4}" style="fill:var(--mf);fill-opacity:.15"/>
         <polyline points="${line}" style="fill:none;stroke:var(--mf)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
         <line x1="${nx}" x2="${nx}" y1="0" y2="${H}" style="stroke:var(--ink)" stroke-opacity=".35" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
-        <circle cx="${nx}" cy="${Y(c.now)}" r="4" style="fill:var(--mf)"/></svg></div>
+        <circle cx="${nx}" cy="${Y(c.now)}" r="4" style="fill:var(--mf)"/></svg>
+      <div class="bacx" hidden></div><div class="bacdot" hidden></div><div class="bactip num" hidden aria-live="polite"></div>
+      <div class="bacaxis num"><span>${clock(c.t0)}</span><span>${clock(t1)}</span></div></div></div>
     <p class="help">Rough Widmark estimate from your weight, body type and drink times. Food, pace, medications and your own body change real BAC a lot. Never use this to decide whether to drive. <button type="button" class="link" data-act="sources">How it's calculated</button></p></section>`}
 setInterval(()=>{if(view==='today'&&cur===todayKey()){const fc=$('#fastcard');if(fc)fc.outerHTML=fastSection()}},30000);
 setInterval(()=>{if(view!=='today'||cur!==todayKey())return;const el=$('#baccard'),c=bacCurve(),show=!!(c&&c.now>0);
-  if(!el&&!show)return;if(!!el!==show||!el.querySelector('.bacnum')){render();return}el.outerHTML=bacHTML(c)},30000);
+  if(!el&&!show)return;if(!!el!==show||!el.querySelector('.bacnum')){render();return}
+  const had=document.activeElement&&document.activeElement.closest('.bacplot');el.outerHTML=bacHTML(c);const p=$('#baccard .bacplot');
+  if(p&&bacHoverT!=null){if(had)p.focus();bacShow(p,bacHoverT)}},30000);
+/* reading the BAC curve at any moment: mouse hover, finger drag, or arrow keys */
+function bacAt(c,t){const p=c.pts;if(t<=p[0][0])return p[0][1];for(let i=1;i<p.length;i++)if(p[i][0]>=t){const a=p[i-1],b=p[i];return a[1]+(b[1]-a[1])*((t-a[0])/Math.max(1,b[0]-a[0]))}return p[p.length-1][1]}
+function bacSpan(c){const t1=c.zeroAt||c.pts[c.pts.length-1][0];return{t0:c.t0,t1,span:Math.max(1,t1-c.t0),mx:Math.max(c.peak.v,0.01)}}
+function bacShow(plot,t){const c=bacLast;if(!c)return;const g=bacSpan(c);t=Math.min(g.t1,Math.max(g.t0,t));bacHoverT=t;
+  const svg=plot.querySelector('svg'),w=svg.clientWidth,h=svg.clientHeight,v=bacAt(c,t),x=(t-g.t0)/g.span*w,y=(70-4-(v/g.mx)*(70-10))/70*h;
+  const ln=plot.querySelector('.bacx'),dot=plot.querySelector('.bacdot'),tip=plot.querySelector('.bactip');
+  ln.hidden=dot.hidden=tip.hidden=false;ln.style.left=x+'px';ln.style.height=h+'px';dot.style.left=x+'px';dot.style.top=y+'px';
+  const now=Date.now(),when=Math.abs(t-now)<90e3?'Now':clock(t);
+  tip.innerHTML=`<b>${v.toFixed(3)}%</b> ${when}${t>now+90e3?' <small>projected</small>':''}`;
+  const tw=tip.offsetWidth;tip.style.left=Math.min(w-tw,Math.max(0,x-tw/2))+'px'}
+function bacHide(plot){bacHoverT=null;plot.querySelectorAll('.bacx,.bacdot,.bactip').forEach(e=>e.hidden=true)}
+function bacPointer(e){const plot=e.target.closest&&e.target.closest('.bacplot');if(!plot||!bacLast)return;const svg=plot.querySelector('svg'),r=svg.getBoundingClientRect(),g=bacSpan(bacLast);
+  bacShow(plot,g.t0+Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))*g.span)}
+document.addEventListener('pointermove',bacPointer);document.addEventListener('pointerdown',e=>{if(!(e.target.closest&&e.target.closest('.bacplot'))){const p=$('#baccard .bacplot');if(p&&bacHoverT!=null)bacHide(p)}bacPointer(e)});
+document.addEventListener('pointerleave',e=>{if(e.pointerType!=='touch'&&e.target.classList&&e.target.classList.contains('bacplot')&&document.activeElement!==e.target)bacHide(e.target)},true);
+document.addEventListener('focusin',e=>{const p=e.target.closest&&e.target.closest('.bacplot');if(p&&bacHoverT==null)bacShow(p,Date.now())});
+document.addEventListener('focusout',e=>{if(e.target.classList&&e.target.classList.contains('bacplot'))bacHide(e.target)});
+document.addEventListener('keydown',e=>{const p=e.target.closest&&e.target.closest('.bacplot');if(!p||!bacLast)return;const g=bacSpan(bacLast),step=(e.shiftKey?60:10)*6e4;
+  const k={ArrowLeft:-step,ArrowRight:step}[e.key];let t=bacHoverT==null?Date.now():bacHoverT;
+  if(k!=null)t+=k;else if(e.key==='Home')t=g.t0;else if(e.key==='End')t=g.t1;else return;e.preventDefault();bacShow(p,t)});
 
 /* ---------- food database (USDA SR Legacy + TempoLife, per 100 g) ---------- */
 let DB=null,dbLoading=null,dbErr=false;
 function loadDB(){if(DB)return Promise.resolve(DB);
   if(!dbLoading)dbLoading=fetch('foods-db.json').then(r=>{if(!r.ok)throw new Error(r.status);return r.json()}).then(j=>{
-    j.idx=j.foods.map(r=>r[0].toLowerCase().split(/[^a-z0-9%]+/).filter(Boolean));DB=j;dbErr=false;return j}).catch(e=>{dbLoading=null;throw e});
+    j.ix=j.foods.map(r=>indexName(r[0]));DB=j;dbErr=false;return j}).catch(e=>{dbLoading=null;throw e});
   return dbLoading}
-const toks=q=>q.toLowerCase().split(/[^a-z0-9%]+/).filter(Boolean).map(t=>t.length>3&&t.endsWith('s')?t.slice(0,-1):t);
-function searchDB(q,limit=30){const ts=toks(q);if(!ts.length||!DB)return[];const hits=[];
-  for(let i=0;i<DB.idx.length;i++){const w=DB.idx[i];if(ts.every(t=>w.some(x=>x.startsWith(t)))){
-    const sc=w.length+(w[0].startsWith(ts[0])?0:4)-(DB.foods[i][6]?0:2);hits.push([sc,i])}}
-  return hits.sort((a,b)=>a[0]-b[0]).slice(0,limit).map(h=>h[1])}
+const STOP=new Set(['and','or','with','of','the','a','an','in','n']);
+const NOISE=new Set(['fast','foods','alcoholic','beverage','beverages','carbonated','raw','all','plain','regular','fresh','fluid','ready','to','drink','rtd','prepared','with','without','added','and','or','of','in','the','a','vitamin','type','commercial','brewed','cooked','tap','water']);
+const SYN={coke:['cola','soda'],'coca cola':['cola','soda'],'coke zero':['cola low calorie','diet soda'],'diet coke':['cola low calorie','diet soda'],'diet pepsi':['cola low calorie','diet soda'],pepsi:['cola','soda'],
+  'diet soda':'carbonated low calorie','diet pop':'carbonated low calorie',soda:'carbonated',pop:'carbonated','soft drink':'carbonated','fizzy drink':'carbonated',
+  'dr pepper':'pepper type','mountain dew':'citrus soft drink','mtn dew':'citrus soft drink','7up':'lemon lime','7 up':'lemon lime',redbull:'red bull',
+  oj:'orange juice',pb:'peanut butter','pb&j':'peanut butter jelly',pbj:'peanut butter jelly',donut:'doughnut',
+  'hot dog':'frankfurter',hotdog:'frankfurter',wiener:'frankfurter',weiner:'frankfurter',frank:'frankfurter',fries:'french fries',
+  mac:'macaroni',burger:'hamburger',mayo:'mayonnaise',catsup:'ketchup',icecream:'ice cream',milkshake:'milk shake',shake:'milk shake',
+  whisky:'whiskey',bourbon:'whiskey',scotch:'whiskey',liquor:'distilled',shot:'distilled',tequila:'distilled','hot chocolate':'cocoa',
+  'iced tea':'tea ready to drink','sweet tea':'tea ready to drink sweetened','cold brew':'coffee','iced coffee':'coffee iced',americano:'coffee',
+  yoghurt:'yogurt',chickpea:'garbanzo',garbanzo:'chickpea',cilantro:'coriander',scallion:'green onion','spring onion':'green onion',
+  jello:'gelatin','jell o':'gelatin','pop tart':'toaster pastries',poptart:'toaster pastries',sub:'submarine sandwich',hoagie:'submarine sandwich',grinder:'submarine sandwich',
+  'tater tot':'potatoes puffs',tots:'potatoes puffs',champagne:'wine',prosecco:'wine',rose:'wine',merlot:'wine red',cabernet:'wine red',chardonnay:'wine white',
+  'sports drink':'gatorade',ramen:'ramen noodle',nugget:'nuggets',pancake:'pancakes',hashbrown:'hash brown',
+  smoothy:'smoothie',fizzy:'carbonated',blt:'submarine sandwich bacon lettuce',zucchini:'zucchini squash',courgette:'zucchini',aubergine:'eggplant',
+  oatmeal:'oats',porridge:'oatmeal',steak:'beef steak'};
+/* softer "also try" words: searched too, but the typed words still count in full */
+const ALSO={pop:'soda',seltzer:'sparkling water','club soda':'sparkling water','la croix':'sparkling water',lacroix:'sparkling water',gatorade:'sports drink',powerade:'sports drink',
+  'red bull':'energy drink',redbull:'energy drink',monster:'energy drink',celsius:'energy drink',bang:'energy drink',rockstar:'energy drink',
+  budweiser:'beer',bud:'beer',coors:'beer',miller:'beer',corona:'beer',heineken:'beer',ipa:'beer',lager:'beer',ale:'beer',stout:'beer',pilsner:'beer',
+  'hard seltzer':'light beer','white claw':'light beer',truly:'light beer',kombucha:'tea',matcha:'green tea',espresso:'coffee'};
+/* typed words that should open with a sensible everyday pick (exact names in foods-db.json; "name|kcal" picks one of several same-named rows) */
+const PIN={milk:['Milk, whole, 3.25% milkfat, with added vitamin D','Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D','Milk, lowfat, fluid, 1% milkfat, with added vitamin A and vitamin D'],
+  egg:['Egg, whole, raw, fresh','Egg, whole, cooked, scrambled','Egg, whole, cooked, hard-boiled'],chicken:['Chicken breast'],
+  rice:['Rice, white, long-grain, regular, enriched, cooked','Rice, white, long-grain, cooked','Brown rice (cooked)'],bacon:['Pork, cured, bacon, cooked, baked','Pork, cured, bacon, pre-sliced, cooked'],
+  tequila:['Alcoholic beverage, distilled, all (gin, rum, vodka|231'],liquor:['Alcoholic beverage, distilled, all (gin, rum, vodka|231'],shot:['Alcoholic beverage, distilled, all (gin, rum, vodka|231'],
+  whiskey:['Alcoholic beverage, distilled, whiskey, 86 proof'],whisky:['Alcoholic beverage, distilled, whiskey, 86 proof'],bourbon:['Alcoholic beverage, distilled, whiskey, 86 proof'],
+  gin:['Alcoholic beverage, distilled, all (gin, rum, vodka|231'],rum:['Alcoholic beverage, distilled, rum, 80 proof'],wine:['Alcoholic beverage, wine, table, red','Alcoholic beverage, wine, table, white'],
+  coffee:['Beverages, coffee, brewed, prepared with tap water'],tea:['Beverages, tea, black, brewed, prepared with tap water','Beverages, tea, green, brewed'],cheese:['Cheese, cheddar','Cheese, mozzarella, whole milk']};
+const PENAL=new Set(['meatless','imitation','substitute','babyfood','infant']);
+const stem=w=>{if(w.length>3){if(w.endsWith('ies'))w=w.slice(0,-2);else if(/(ch|sh|ss|x|o)es$/.test(w))w=w.slice(0,-2);else if(w.endsWith('s')&&!/(ss|us|is)$/.test(w))w=w.slice(0,-1)}
+  return w.length>3?w.replace(/(ie|y)$/,'i'):w};
+const words=s=>s.toLowerCase().replace(/['’]/g,'').split(/[^a-z0-9%&]+/).filter(w=>w&&w!=='&');
+const toks=q=>words(q).filter(w=>!STOP.has(w)).map(stem);
+function indexName(name){const segs=name.toLowerCase().replace(/['’]/g,'').split(/,|\(|\)/),w=[],seg=[];
+  segs.forEach((s,i)=>words(s).forEach(x=>{w.push(stem(x));seg.push(i)}));
+  let first=seg.find((s,j)=>!NOISE.has(w[j])&&!/^[0-9.%]+$/.test(w[j]));if(first==null)first=0;
+  const head=w.filter((x,j)=>seg[j]===first&&!NOISE.has(x)).join(' ');return{w,seg,first,head}}
+/* query variants: the typed words, plus synonym rewrites of any word or two-word phrase in it */
+const synOf=w=>{const s=SYN[w]||SYN[stem(w)];return s?[].concat(s):null};
+function variants(q){const raw=words(q).filter(w=>!STOP.has(w)),out=[{t:raw.map(stem),syn:0}],seen=new Set([out[0].t.join(' ')]);
+  const add=t=>{const k=t.join(' ');if(t.length&&!seen.has(k)){seen.add(k);out.push({t,syn:1})}};
+  for(let n=Math.min(raw.length,3);n>=1;n--)for(let i=0;i+n<=raw.length;i++){const ss=synOf(raw.slice(i,i+n).join(' '));
+    if(ss){if(n===raw.length)out[0].syn=-1;ss.forEach(s=>add([...raw.slice(0,i).map(stem),...toks(s),...raw.slice(i+n).map(stem)]))}
+    const al=ALSO[raw.slice(i,i+n).join(' ')];if(al){const k=out.length;add([...raw.slice(0,i).map(stem),...toks(al),...raw.slice(i+n).map(stem)]);if(out[k])out[k].syn=2}}
+  const last=raw[raw.length-1];if(raw.length&&last.length>=3&&!synOf(last))Object.keys(SYN).filter(k=>!k.includes(' ')&&k.length>last.length&&k.length-last.length<=2&&k.startsWith(last)).slice(0,3)
+    .forEach(k=>synOf(k).forEach(s=>add([...raw.slice(0,-1).map(stem),...toks(s)])));
+  return out}
+/* how well one query token matches one stemmed word: 0 exact, 1 prefix, 3 inside a longer word, 4 one typo */
+function tokQ(t,x,fuzzy){if(x===t)return 0;if(x.startsWith(t))return 1;if(t.length>=4&&x.endsWith(t))return 3;
+  if(fuzzy&&t.length>=4&&Math.abs(x.length-t.length)<=2&&lev(t,x)<=(t.length>=7?2:1))return 6;return -1}
+function lev(a,b){let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const c=[i];
+  for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[b.length]}
+/* lower is better; null = no match */
+function scoreIx(ix,v,fuzzy){let s=v.syn===2?6:v.syn>0?-4:v.syn<0?5:0;const used=new Set();let hitFirst=false;
+  for(const t of v.t){let best=-1,bj=-1;for(let j=0;j<ix.w.length;j++){const q=tokQ(t,ix.w[j],fuzzy&&fuzzy.has(t));if(q>=0&&(best<0||q<best)){best=q;bj=j;if(!q)break}}
+    if(best<0)return null;s+=best;used.add(bj);if(ix.seg[bj]===ix.first)hitFirst=true}
+  for(let j=0;j<ix.w.length;j++)if(!used.has(j)&&!NOISE.has(ix.w[j])&&!/^[0-9.%]+$/.test(ix.w[j])&&ix.w[j].length>1)s+=(ix.seg[j]===ix.first?1.5:1)+(PENAL.has(ix.w[j])?3:0);
+  if(!hitFirst)s+=3;if(v.syn!==2&&ix.head===v.t.filter(t=>!NOISE.has(t)).join(' '))s-=5;return s}
+function bestScore(ix,vs,fuzzy){let b=null;for(const v of vs){const s=scoreIx(ix,v,fuzzy);if(s!=null&&(b==null||s<b))b=s}return b}
+/* typo tolerance only for words that match nothing in the database as typed */
+const fuzzSet=(vs,vocab)=>{const f=new Set();vs.forEach(v=>v.t.forEach(t=>{if(t.length>=4&&!vocab.some(x=>x.startsWith(t)||x.endsWith(t)))f.add(t)}));return f.size?f:null};
+function searchDB(q,limit=30){const vs=variants(q);if(!vs[0].t.length||!DB)return[];
+  if(!DB.vocab)DB.vocab=[...new Set(DB.ix.flatMap(x=>x.w))];
+  if(!DB.pin){DB.pin={};const byName={};DB.foods.forEach((r,i)=>{(byName[r[0]]=byName[r[0]]||[]).push(i)});
+    for(const k in PIN)DB.pin[k]=PIN[k].map(n=>{const [nm,kc]=n.split('|'),c=byName[nm]||[];return kc?c.find(i=>DB.foods[i][2]==kc):c[0]}).filter(i=>i!=null)}
+  const fz=fuzzSet(vs,DB.vocab),pins=DB.pin[vs[0].t.join(' ')]||[],hits=[];
+  for(let i=0;i<DB.ix.length;i++){const s=bestScore(DB.ix[i],vs,fz);if(s!=null)hits.push([s+DB.ix[i].w.length*0.05,i])}
+  pins.forEach((i,n)=>hits.push([-100+n,i]));
+  const seen=new Set();return hits.sort((a,b)=>a[0]-b[0]).filter(h=>{const r=DB.foods[h[1]],k=r[0].toLowerCase()+'|'+r[2];if(seen.has(k))return false;seen.add(k);return true}).slice(0,limit).map(h=>h[1])}
+/* the same matcher for your own foods and drinks (names are short, so typos are allowed) */
+const nameScore=(name,vs)=>{const ix=indexName(name);return bestScore(ix,vs,fuzzSet(vs,ix.w))};
 function dbForm(i){const [name,cat,kcal,p,c,f,usda]=DB.foods[i];let unit=isOz()?'oz':'g';
   modal(`<form id="dbf"><h3>${esc(name)}</h3>
     <p class="help">${esc(DB.cats[cat])} · ${usda?'USDA FoodData Central':'TempoLife'} · per 100 g: ${kcal} cal, ${p}g P, ${c}g C, ${f}g F</p>
@@ -518,7 +611,7 @@ function todayHTML(){
           <div class="stat"><small>All drinks</small><b>${fmtVol(t.ml)}</b></div>
           <div class="stat"><small>Drink cal</small><b>${fmt(t.dkcal)}</b></div>
           ${s.caffeine?`<div class="stat"><small>Caffeine</small><b>${fmt(t.caf)}</b> <small style="display:inline">/ ${s.cafLimit} mg</small></div>`:''}
-          ${s.alcohol?`<div class="stat"><small>Alcohol</small><b>${r1(t.alc)}</b> <small style="display:inline">std drinks</small></div>`:''}
+          ${s.alcohol?`<div class="stat"><small>Alcohol</small><b>${r1(t.alc)}</b> <small style="display:inline" title="U.S. standard drinks, 14 g of alcohol each">drinks</small></div>`:''}
         </div>
       </div>
     </div>
@@ -732,7 +825,7 @@ function openAdd(){
           [...d].sort((a,b)=>b.t-a.t).forEach(e=>{if(e.ref&&!seen.has(e.ref)&&rec.length<10){const it=findItem(e.ref);if(it&&(S.settings.alcohol||!isAlc(it))){seen.add(e.ref);rec.push(it)}}})}
         const fav=sorted([...S.foods,...visDrinks()]).filter(it=>!seen.has(it.id)&&!hide(it)).slice(0,12);
         res.innerHTML=(rec.length?'<div class="grp">Recent</div>'+rec.map(it=>row(it,kindOf(it))).join(''):'')+'<div class="grp">Your library</div>'+fav.map(it=>row(it,kindOf(it))).join('')}
-      else{const ts=toks(s),m=sorted([...S.foods,...visDrinks()]).filter(it=>{const w=it.name.toLowerCase();return !hide(it)&&ts.every(t=>w.includes(t))});
+      else{const vs=variants(s),m=sorted([...S.foods,...visDrinks()]).map(it=>[hide(it)?null:nameScore(it.name,vs),it]).filter(x=>x[0]!=null).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
         const dbh=searchDB(s,S.settings.hideAllergens?200:30).filter(i=>!S.settings.hideAllergens||!flagged(allergenInfo(null,DB.foods[i][0]))).slice(0,30);
         res.innerHTML=(m.length?'<div class="grp">Your foods & drinks</div>'+m.map(it=>row(it,kindOf(it))).join(''):'')
           +'<div class="grp">Food database</div>'+(DB?(dbh.length?dbh.map(i=>{const r=DB.foods[i];return`<button type="button" class="res" data-act="dbPick" data-i="${i}"><span class="dot" style="background:var(--mc)"></span><span class="info-b"><div class="name">${esc(r[0])}</div><div class="meta num">${r[2]} cal · ${r[3]}g P per 100 g<span class="dbtag">${r[6]?'USDA':'TL'}</span></div>${warnSpan(allergenInfo(null,r[0]))}</span><span class="plus">›</span></button>`}).join('')
@@ -870,7 +963,7 @@ async function exportJson(){closeDataMenu();const r=await pickAndSave('mbnutriti
   if(r)markBackedUp(r==='file'?'Backup saved to '+jsonHandleName:'Backup downloaded to your Downloads folder')}
 async function exportCsv(){closeDataMenu();
   const q=v=>{let s=String(v??'');if(/^[=+\-@\t\r]/.test(s))s="'"+s;return /[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s};
-  const rows=[['date','time','type','name','servings','unit','calories','protein_g','carbs_g','fat_g','volume_ml','hydration_ml','caffeine_mg','alcohol_std']];
+  const rows=[['date','time','type','name','servings','unit','calories','protein_g','carbs_g','fat_g','volume_ml','hydration_ml','caffeine_mg','alcohol_drinks']];
   Object.keys(S.log).sort().forEach(d=>[...S.log[d]].sort((a,b)=>a.t-b.t).forEach(e=>{const x=e.qty,dr=e.kind==='drink';
     rows.push([d,new Date(e.t).toTimeString().slice(0,5),e.kind,e.name,x,dr?'':e.unit,r1(e.kcal*x),r1(e.p*x),r1(e.c*x),r1(e.f*x),dr?r0(e.ml*x):'',dr?r0(e.ml*e.hyd/100*x):'',r0((e.caf||0)*x),dr?r1((e.alc||0)*x):''])}));
   const r=await pickAndSave('mbnutrition-log.csv','﻿'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv','csv',null);
