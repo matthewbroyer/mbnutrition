@@ -1,6 +1,6 @@
 "use strict";
 const KEY='mbnutrition.v1',OLD_KEYS=['mbcalories.v1','fuel.v1'], ML_OZ=29.5735;
-const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.3',released:'2026-10-14',firstYear:2026};
+const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.4',released:'2026-10-14',firstYear:2026};
 const THEME_KEY='mbnutrition.theme', SEEN_KEY='mbnutrition.seen', HANDLE_DB='mbnutrition.files';
 const $=s=>document.querySelector(s);
 const uid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5)};
@@ -197,37 +197,67 @@ function bacSection(){const s=S.settings;if(!alcOn())return'';const c=bacCurve()
     return`<section class="card span2 bac" id="baccard"><h2><span>Estimated BAC</span></h2><p class="empty" style="margin:0">Add your body weight in Settings to see a live BAC estimate.</p><div class="dayacts"><button type="button" class="btn" data-act="tab" data-v="settings">Add your weight</button></div></section>`}
   return''}
 let bacLast=null,bacHoverT=null;
-function bacHTML(c){bacLast=c;const W=320,H=70,t1=c.zeroAt||c.pts[c.pts.length-1][0],span=Math.max(1,t1-c.t0),mx=Math.max(c.peak.v,0.01);
-  const X=t=>r1((t-c.t0)/span*W),Y=v=>r1(H-4-(v/mx)*(H-10));
-  const line=c.pts.map(p=>X(p[0])+','+Y(p[1])).join(' '),nx=Math.min(W,X(Date.now()));
+const BAC_W=320,BAC_H=120,BAC_T=16,BAC_B=6;   /* plot box; top room for the peak label */
+const bacY=(v,mx,h=BAC_H)=>(BAC_T+(1-v/mx)*(BAC_H-BAC_T-BAC_B))/BAC_H*h;
+function bacHTML(c){bacLast=c;const W=BAC_W,H=BAC_H,t1=c.zeroAt||c.pts[c.pts.length-1][0],span=Math.max(1,t1-c.t0),mx=Math.max(c.peak.v*1.05,0.01),now=Date.now();
+  const X=t=>r1((t-c.t0)/span*W),Y=v=>r1(bacY(v,mx));
+  const d='M'+c.pts.map(p=>X(p[0])+' '+Y(p[1])).join(' L'),nx=Math.min(W,Math.max(0,X(now))),base=H-BAC_B;
+  const px=X(c.peak.t),py=Y(c.peak.v),grid=[0.25,0.5,0.75].map(f=>Y(mx*f));
+  const mid=c.t0+span/2,rising=c.peak.t>now;
   return`<section class="card span2 bac" id="baccard" aria-label="Estimated blood alcohol">
-    <h2><span>Estimated BAC · live</span></h2>
-    <div class="bacwrap"><div><div class="bignum bacnum num">${c.now.toFixed(3)}%</div>
-      <div class="hydsub num">${c.peak.t>Date.now()?'Still rising · ':''}Peak ${c.peak.v.toFixed(3)}% at ${clock(c.peak.t)}${c.zeroAt?' · back to 0.000% around '+clock(c.zeroAt):''}</div></div>
+    <h2><span>Estimated BAC · live</span><span class="bacbadge ${rising?'up':'down'}">${rising?'Rising':'Coming down'}</span></h2>
+    <div class="bacwrap"><div class="bachead"><div class="bignum bacnum num">${c.now.toFixed(3)}<small>%</small></div>
+      <div class="hydsub num">Peak <b>${c.peak.v.toFixed(3)}%</b> at ${clock(c.peak.t)}${c.zeroAt?`<br>Back to 0.000% around <b>${clock(c.zeroAt)}</b>`:''}</div></div>
       <div class="bacplot" tabindex="0" role="img" aria-label="BAC estimate over time. Hover, drag or use the arrow keys to read the estimate at any time.">
       <svg class="bacspark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points="0,${H-4} ${line} ${X(t1)},${H-4}" style="fill:var(--bac);fill-opacity:.15"/>
-        <polyline points="${line}" style="fill:none;stroke:var(--bac)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
-        <line x1="${nx}" x2="${nx}" y1="0" y2="${H}" style="stroke:var(--ink)" stroke-opacity=".35" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
-        <circle cx="${nx}" cy="${Y(c.now)}" r="4" style="fill:var(--bac)"/></svg>
+        <defs><linearGradient id="bacg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent);stop-opacity:.38"/><stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient>
+          <clipPath id="bacpast"><rect x="0" y="0" width="${nx}" height="${H}"/></clipPath><clipPath id="bacfut"><rect x="${nx}" y="0" width="${W-nx}" height="${H}"/></clipPath></defs>
+        ${grid.map(y=>`<line x1="0" x2="${W}" y1="${y}" y2="${y}" class="bacgrid" vector-effect="non-scaling-stroke"/>`).join('')}
+        <line x1="0" x2="${W}" y1="${base}" y2="${base}" class="bacbase" vector-effect="non-scaling-stroke"/>
+        <path d="${d} L${X(t1)} ${base} L0 ${base} Z" fill="url(#bacg)" clip-path="url(#bacpast)"/>
+        <path d="${d} L${X(t1)} ${base} L0 ${base} Z" fill="url(#bacg)" opacity=".45" clip-path="url(#bacfut)"/>
+        <path d="${d}" class="bacline" clip-path="url(#bacpast)" vector-effect="non-scaling-stroke"/>
+        <path d="${d}" class="bacline fut" clip-path="url(#bacfut)" vector-effect="non-scaling-stroke"/>
+        <line x1="${nx}" x2="${nx}" y1="${BAC_T-6}" y2="${base}" class="bacnow" vector-effect="non-scaling-stroke"/></svg>
+      <span class="bacpk" style="left:${r1(px/W*100)}%;top:${r1(py/H*100)}%"></span>
+      <span class="bacpkl num" style="left:${r1(Math.min(88,Math.max(12,px/W*100)))}%">Peak ${c.peak.v.toFixed(3)}%</span>
+      <span class="bacme" style="left:${r1(nx/W*100)}%;top:${r1(Y(c.now)/H*100)}%"></span>
       <div class="bacx" hidden></div><div class="bacdot" hidden></div><div class="bactip num" hidden aria-live="polite"></div>
-      <div class="bacaxis num"><span>${clock(c.t0)}</span><span>${clock(t1)}</span></div></div></div>
-    <p class="help">Rough Widmark estimate from your weight, body type and drink times. Food, pace, medications and your own body change real BAC a lot. Never use this to decide whether to drive. <button type="button" class="link" data-act="sources">How it's calculated</button></p></section>`}
+      <div class="bacaxis num"><span>${clock(c.t0)}</span><span>${clock(mid)}</span><span>${clock(t1)}</span></div></div></div>
+    <p class="help">Rough Widmark estimate from your weight, body type and drink times. Food, pace, medications and your own body change real BAC a lot. Never use this to decide whether to drive. The faded part is projected. <button type="button" class="link" data-act="sources">How it's calculated</button></p></section>`}
 setInterval(()=>{if(view==='today'&&cur===todayKey()){const fc=$('#fastcard');if(fc)fc.outerHTML=fastSection()}},30000);
 setInterval(()=>{if(view!=='today'||cur!==todayKey())return;const el=$('#baccard'),c=bacCurve(),show=!!(c&&c.now>0);
   if(!el&&!show)return;if(!!el!==show||!el.querySelector('.bacnum')){render();return}
   const had=document.activeElement&&document.activeElement.closest('.bacplot');el.outerHTML=bacHTML(c);const p=$('#baccard .bacplot');
   if(p&&bacHoverT!=null){if(had)p.focus();bacShow(p,bacHoverT)}},30000);
+/* one tooltip for every chart mark with data-tip="Value|label|extra": hover, tap or keyboard focus */
+const chartTip=(()=>{let el=null,on=null,touchFirst=false;
+  const mk=()=>{if(!el){el=document.createElement('div');el.className='ctip num';el.setAttribute('role','status');el.hidden=true;document.body.appendChild(el)}return el};
+  const show=t=>{const tip=mk(),parts=(t.dataset.tip||'').split('|');if(!parts[0])return;on=t;tip.textContent='';
+    const b=document.createElement('b');b.textContent=parts[0];tip.appendChild(b);
+    parts.slice(1).filter(Boolean).forEach(x=>{const sp=document.createElement('span');sp.textContent=x;tip.appendChild(sp)});
+    tip.hidden=false;const r=(t.querySelector('.wbar')||t).getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+    let left=r.left+r.width/2-tw/2;left=Math.max(8,Math.min(innerWidth-tw-8,left));let top=r.top-th-8;if(top<8)top=r.bottom+8;
+    tip.style.left=left+'px';tip.style.top=top+'px';document.querySelectorAll('.tipon').forEach(x=>x.classList.remove('tipon'));t.classList.add('tipon')};
+  const hide=()=>{on=null;if(el)el.hidden=true;document.querySelectorAll('.tipon').forEach(x=>x.classList.remove('tipon'))};
+  document.addEventListener('pointerover',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t&&t!==on)show(t);else if(!t&&on&&e.pointerType!=='touch')hide()});
+  document.addEventListener('pointerdown',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');touchFirst=!!t&&e.pointerType!=='mouse'&&t!==on;if(t)show(t);else hide()});
+  document.addEventListener('focusin',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(t)show(t);else if(on)hide()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&on)hide()});
+  addEventListener('scroll',()=>{if(on)hide()},{passive:true});
+  /* on a touchscreen the first tap on a bar shows its numbers; a second tap opens the day */
+  return{hide,firstTap:()=>{const f=touchFirst;touchFirst=false;return f}}})();
+
 /* reading the BAC curve at any moment: mouse hover, finger drag, or arrow keys */
 function bacAt(c,t){const p=c.pts;if(t<=p[0][0])return p[0][1];for(let i=1;i<p.length;i++)if(p[i][0]>=t){const a=p[i-1],b=p[i];return a[1]+(b[1]-a[1])*((t-a[0])/Math.max(1,b[0]-a[0]))}return p[p.length-1][1]}
-function bacSpan(c){const t1=c.zeroAt||c.pts[c.pts.length-1][0];return{t0:c.t0,t1,span:Math.max(1,t1-c.t0),mx:Math.max(c.peak.v,0.01)}}
+function bacSpan(c){const t1=c.zeroAt||c.pts[c.pts.length-1][0];return{t0:c.t0,t1,span:Math.max(1,t1-c.t0),mx:Math.max(c.peak.v*1.05,0.01)}}
 function bacShow(plot,t){const c=bacLast;if(!c)return;const g=bacSpan(c);t=Math.min(g.t1,Math.max(g.t0,t));bacHoverT=t;
-  const svg=plot.querySelector('svg'),w=svg.clientWidth,h=svg.clientHeight,v=bacAt(c,t),x=(t-g.t0)/g.span*w,y=(70-4-(v/g.mx)*(70-10))/70*h;
+  const svg=plot.querySelector('svg'),w=svg.clientWidth,h=svg.clientHeight,v=bacAt(c,t),x=(t-g.t0)/g.span*w,y=bacY(v,g.mx,h);
   const ln=plot.querySelector('.bacx'),dot=plot.querySelector('.bacdot'),tip=plot.querySelector('.bactip');
   ln.hidden=dot.hidden=tip.hidden=false;ln.style.left=x+'px';ln.style.height=h+'px';dot.style.left=x+'px';dot.style.top=y+'px';
   const now=Date.now(),when=Math.abs(t-now)<90e3?'Now':clock(t);
-  tip.innerHTML=`<b>${v.toFixed(3)}%</b> ${when}${t>now+90e3?' <small>projected</small>':''}`;
-  const tw=tip.offsetWidth;tip.style.left=Math.min(w-tw,Math.max(0,x-tw/2))+'px'}
+  tip.innerHTML=`<b>${v.toFixed(3)}%</b><span>${when}${t>now+90e3?' · projected':''}</span>`;ln.style.top='0';
+  const tw=tip.offsetWidth,th=tip.offsetHeight;tip.style.left=Math.min(w-tw,Math.max(0,x-tw/2))+'px';tip.style.top=(y-th-14>=0?y-th-14:Math.min(h-th,y+14))+'px'}
 function bacHide(plot){bacHoverT=null;plot.querySelectorAll('.bacx,.bacdot,.bactip').forEach(e=>e.hidden=true)}
 function bacPointer(e){const plot=e.target.closest&&e.target.closest('.bacplot');if(!plot||!bacLast)return;const svg=plot.querySelector('svg'),r=svg.getBoundingClientRect(),g=bacSpan(bacLast);
   bacShow(plot,g.t0+Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))*g.span)}
@@ -379,34 +409,51 @@ function offForm(x){const unitsF=[...(x.sq||x.k100==null?[['srv','servings']]:[]
   const link=x.code?`<a href="https://world.openfoodfacts.org/product/${encodeURIComponent(x.code)}" target="_blank" rel="noopener noreferrer">Open Food Facts${EXT}</a>`:'Open Food Facts';
   const w=allergenInfo(null,x.name);
   modal(`<form id="offf"><h3>${esc(x.name)}</h3>
-    <p class="help">From ${link}, where volunteers add products. Check it against the label: you can fix the numbers before saving.${x.serving?' Serving on the label: '+esc(x.serving)+'.':''}</p>
+    <p class="help">From ${link}, where volunteers add products. Check it against the label and fix anything that's off below.${x.serving?' Serving on the label: '+esc(x.serving)+'.':''}</p>
     ${flagged(w)?`<div class="warnbox"><b>⚠ ${esc(warnText(w))}.</b> Based on the name only. Check the package.</div>`:''}
     <div class="row"><div style="grid-column:span 2"><label class="f" for="amt">How much</label><input type="number" inputmode="decimal" id="amt" name="amt" min="0" step="any" required autofocus></div>
     <div><label class="f" for="au">Unit</label><select id="au" name="unit">${x.drink&&x.k100!=null?`<option value="ml">ml</option><option value="floz">fl oz</option>`:''}${x.drink&&x.k100!=null?'':unitsF.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}${x.drink&&x.sq?'<option value="srv">servings</option>':''}</select></div></div>
     <div class="amts" id="amts"></div><div class="sum num" id="dsum"></div>
-    <label class="check"><input type="checkbox" name="keep" checked> Save to my ${x.drink?'drinks':'foods'} so it's instant next time</label>
+    <details class="qa" id="offEd"><summary>Edit name or numbers</summary>
+      <label class="f" for="on">Name</label><input type="text" id="on" name="oname" value="${esc(x.name)}" maxlength="120">
+      <div class="row"><div><label class="f" for="ok2">Calories</label><input type="number" inputmode="decimal" id="ok2" data-ed="kcal" min="0" step="any"></div>
+      <div><label class="f" for="op">Protein g</label><input type="number" inputmode="decimal" id="op" data-ed="p" min="0" step="any"></div>
+      <div><label class="f" for="oc">Carbs g</label><input type="number" inputmode="decimal" id="oc" data-ed="c" min="0" step="any"></div>
+      <div><label class="f" for="of">Fat g</label><input type="number" inputmode="decimal" id="of" data-ed="f" min="0" step="any"></div></div>
+      <p class="help" id="edNote">For the amount above. Change the amount and these scale with it.</p></details>
+    <label class="check"><input type="checkbox" name="keep" checked> <span id="keepLbl">Save to my ${x.drink?'drinks':'foods'} so it's instant next time</span></label>
     <div class="actions"><span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary">Log it</button></div></form>`,sh=>{
     const amt=sh.querySelector('#amt'),au=sh.querySelector('#au'),box=sh.querySelector('#amts'),sum=sh.querySelector('#dsum');
     /* base = grams or ml; servings use the label serving size, or the per-serving numbers when that is all we have */
     const base=()=>{const a=num(amt.value);return au.value==='oz'?a*28.3495:au.value==='floz'?a*ML_OZ:au.value==='srv'?(x.sq?a*x.sq:0):a};
     const vals=()=>{if(au.value==='srv'&&!x.sq){const a=num(amt.value);return{kcal:x.kS*a,p:x.pS*a,c:x.cS*a,f:x.fS*a}}
       const g=base()/100;return{kcal:x.k100*g,p:x.p100*g,c:x.c100*g,f:x.f100*g}};
-    const calc=()=>{const o=vals();sum.innerHTML=`<b>${fmt(o.kcal)} cal</b> · ${r1(o.p)}g P · ${r1(o.c)}g C · ${r1(o.f)}g F`+(base()?` <span style="color:var(--muted)">(${fmt(base())} ${x.drink?'ml':'g'})</span>`:'')+(x.drink&&x.abv&&alcOn()?` · ${r1(x.abv)}% alcohol`:'')};
+    /* edits: user-typed values for the current amount; they scale when the amount changes */
+    let ed=null,edBase=0;const edIn=[...sh.querySelectorAll('[data-ed]')],nameIn=sh.querySelector('#on'),keepLbl=sh.querySelector('#keepLbl');
+    const markEdited=()=>{keepLbl.textContent=`Save as my own ${x.drink?'drink':'food'} (with your changes)`};
+    const amtNow=()=>num(amt.value)||0;
+    const raw=vals;const valsE=()=>{if(!ed)return raw();const k=edBase>0?amtNow()/edBase:1;return{kcal:ed.kcal*k,p:ed.p*k,c:ed.c*k,f:ed.f*k}};
+    const fillEd=()=>{const o=valsE();edIn.forEach(i=>{if(document.activeElement!==i)i.value=r1(o[i.dataset.ed])})};
+    edIn.forEach(i=>i.oninput=()=>{if(!ed){ed=raw();}edBase=amtNow();edIn.forEach(j=>{ed[j.dataset.ed]=num(j.value)});markEdited();calc()});
+    nameIn.oninput=markEdited;
+    const calc=()=>{const o=valsE();fillEd();sum.innerHTML=`<b>${fmt(o.kcal)} cal</b> · ${r1(o.p)}g P · ${r1(o.c)}g C · ${r1(o.f)}g F`+(base()?` <span style="color:var(--muted)">(${fmt(base())} ${x.drink?'ml':'g'})</span>`:'')+(x.drink&&x.abv&&alcOn()?` · ${r1(x.abv)}% alcohol`:'')};
     const chips=()=>{const u=au.value,list=u==='srv'?[0.5,1,1.5,2]:u==='oz'?[1,2,3,4,6,8]:u==='floz'?[8,12,16,20]:u==='ml'?[250,330,355,500]:[30,50,100,150,200,250];
       box.innerHTML=list.map(v=>`<button type="button" data-amt="${v}">${v} ${u==='srv'?'serv.':u==='floz'?'fl oz':u}</button>`).join('')};
     const start=()=>{const u=au.value;amt.value=u==='srv'?1:u==='ml'?(x.sq&&x.su==='ml'?r0(x.sq):355):u==='floz'?(x.sq&&x.su==='ml'?r1(x.sq/ML_OZ):12):u==='oz'?4:(x.sq&&x.su!=='ml'?r0(x.sq):100)};
     if(x.drink&&x.k100!=null)au.value=isOz()?'floz':'ml';else if(x.sq)au.value='srv';else if(x.k100!=null)au.value=isOz()?'oz':'g';
     start();chips();calc();
-    amt.oninput=calc;au.onchange=()=>{start();chips();calc()};
+    amt.oninput=calc;au.onchange=()=>{if(ed){const k=edBase>0?amtNow()/edBase:1;const o={kcal:ed.kcal*k,p:ed.p*k,c:ed.c*k,f:ed.f*k},rb=raw();start();const nb=raw();
+        /* keep the user's correction as a ratio to the label numbers so it survives a unit change */
+        ed={kcal:rb.kcal?nb.kcal*o.kcal/rb.kcal:o.kcal,p:rb.p?nb.p*o.p/rb.p:o.p,c:rb.c?nb.c*o.c/rb.c:o.c,f:rb.f?nb.f*o.f/rb.f:o.f};edBase=amtNow()}else start();chips();calc()};
     box.onclick=e=>{const v=e.target.dataset.amt;if(v){amt.value=v;calc()}};
-    sh.querySelector('#offf').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target),o=vals();if(!(num(amt.value)>0))return;
+    sh.querySelector('#offf').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target),o=valsE(),nm=(nameIn.value.trim()||x.name).slice(0,120);if(!(num(amt.value)>0))return;
       const label=au.value==='srv'?`${r1(num(amt.value))} serving${num(amt.value)===1?'':'s'}`+(x.serving?` (${x.serving})`:''):`${r1(num(amt.value))} ${au.value==='floz'?'fl oz':au.value}`;
       let it,kind;
       if(x.drink){kind='drink';const ml=r0(base()||(x.sq||355));
-        it={name:x.name,ml,kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f),caf:r0(x.caf*ml/100),hyd:x.abv>5?0:100,abv:alcOn()?r1(x.abv):0,src:'est'};it.alc=stdDrinks(it.ml,it.abv)}
-      else{kind='food';it={name:x.name,serving:label.slice(0,80),kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f)}}
+        it={name:nm,ml,kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f),caf:r0(x.caf*ml/100),hyd:x.abv>5?0:100,abv:alcOn()?r1(x.abv):0,src:'est'};it.alc=stdDrinks(it.ml,it.abv)}
+      else{kind='food';it={name:nm,serving:label.slice(0,80),kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f)}}
       if(fd.get('keep')){it.id=uid();it.fav=true;it.uses=0;if(kind==='food'){it.type='food';S.foods.push(it)}else S.drinks.push(it)}
-      closeModal();addEntries([mkEntry(it,kind)],'Logged '+x.name)}})}
+      closeModal();addEntries([mkEntry(it,kind)],'Logged '+nm+(fd.get('keep')?' and saved it':''))}})}
 
 /* ---------- allergies & intolerances ----------
    Matching is by food NAME only (the database has no ingredient lists), so it flags "may contain".
@@ -643,7 +690,8 @@ function todayHTML(){
   const ring=anim('ring',r1(C*(1-Math.min(1,t.kcal/(s.kcal||1)))));
   const macros=[['Protein','p','var(--mp)'],['Carbs','c','var(--mc)'],['Fat','f','var(--mf)']].map(([n,k,col])=>{
     const a=anim('m'+k,r1(Math.min(100,t[k]/(s[k]||1)*100)));
-    return `<div><div class="mrow num"><span style="--sw:${col}">${n}</span><span><b>${r0(t[k])}</b> / ${s[k]} g</span></div><div class="bar"><i style="width:${a.from}%;background:${col}" data-to="${a.to}" data-prop="w"></i></div></div>`}).join('');
+    const left=s[k]-t[k],pc=s[k]?r0(t[k]/s[k]*100):0;
+    return `<div class="mtip" tabindex="0" data-tip="${r0(t[k])} of ${s[k]} g|${n} · ${pc}% of target|${left>=0?r0(left)+' g to go':r0(-left)+' g over'}"><div class="mrow num"><span style="--sw:${col}">${n}</span><span><b>${r0(t[k])}</b> / ${s[k]} g</span></div><div class="bar"><i style="width:${a.from}%;background:${col}" data-to="${a.to}" data-prop="w"></i></div></div>`}).join('');
   const hp=t.hyd/(s.waterMl||1),fill=Math.min(1,hp);
   const ty=anim('glass',fill<=0?164:r1(150-fill*142));
   const left=Math.max(0,s.waterMl-t.hyd);
@@ -656,7 +704,7 @@ function todayHTML(){
   <section class="card" aria-label="Calories">
     <h2><span>Calories</span><span class="num">${fmt(t.kcal)} / ${fmt(s.kcal)}</span></h2>
     <div class="calwrap">
-      <svg class="ring" viewBox="0 0 140 140" role="img" aria-label="${fmt(Math.abs(rem))} calories ${over?'over':'left'}">
+      <svg class="ring" viewBox="0 0 140 140" role="img" tabindex="0" aria-label="${fmt(Math.abs(rem))} calories ${over?'over':'left'}" data-tip="${fmt(t.kcal)} of ${fmt(s.kcal)} cal|${s.kcal?r0(t.kcal/s.kcal*100):0}% of target|${t.dkcal?fmt(t.dkcal)+' from drinks':'None from drinks'}">
         <defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--food-2)"/><stop offset="1" style="stop-color:var(--food)"/></linearGradient></defs>
         <circle cx="70" cy="70" r="56" fill="none" style="stroke:var(--surface-3)" stroke-width="13"/>
         <circle class="ringfg" cx="70" cy="70" r="56" fill="none" style="stroke:${over?'var(--warn)':'url(#rg)'}" stroke-width="13" stroke-linecap="round" stroke-dasharray="${r1(C)}" stroke-dashoffset="${ring.from}" data-to="${ring.to}" data-prop="dash" transform="rotate(-90 70 70)"/>
@@ -671,7 +719,7 @@ function todayHTML(){
   <section class="card" aria-label="Hydration">
     <h2><span>Hydration</span><button type="button" class="link" data-act="tab" data-v="settings">Target ${fmtVol(s.waterMl)}</button></h2>
     <div class="hydwrap">
-      <svg class="glass" viewBox="0 0 120 160" role="img" aria-label="${r0(hp*100)} percent of hydration target">
+      <svg class="glass" viewBox="0 0 120 160" role="img" tabindex="0" aria-label="${r0(hp*100)} percent of hydration target" data-tip="${fmtVol(t.hyd)} counted|${r0(hp*100)}% of ${fmtVol(s.waterMl)}|${fmtVol(t.ml)} drunk in total">
         <defs><clipPath id="gc"><path d="M14 8 H106 L96 150 Q95 155 90 155 H30 Q25 155 24 150 Z"/></clipPath>
         <linearGradient id="wg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--water-2)"/><stop offset="1" style="stop-color:var(--water)"/></linearGradient></defs>
         <g clip-path="url(#gc)"><rect width="120" height="160" style="fill:var(--surface-3)"/>
@@ -745,7 +793,8 @@ function trendsHTML(){
   const avg=k=>logged.length?logged.reduce((a,x)=>a+x[k],0)/logged.length:0;
   const kMax=Math.max(s.kcal*1.25,...ts.map(x=>x.kcal)),hMax=Math.max(s.waterMl*1.25,...ts.map(x=>x.hyd));
   const wd=d=>{const [y,m,dd]=d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString(undefined,{weekday:'narrow'})};
-  const bars=(k,max,target,grad)=>`<div class="week">${ts.map(x=>{const a=anim('w'+k+x.d,r1(x[k]/max*100));const val=k==='hyd'?fmtVol(x[k]):fmt(x[k])+' cal',full=(()=>{const [y,m,dd]=x.d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})})();return`<div class="wcol ${x.d===cur?'cur':''}"><div class="wbar" style="height:${a.from}%;background:${grad}" data-to="${a.to}" data-prop="h" title="${full}: ${val}"></div><small aria-hidden="true">${wd(x.d)}</small><span class="vh">${full}: ${val}</span></div>`}).join('')}<div class="tline" style="bottom:calc(${r1(target/max*100)}% * (150 - 26) / 150 + 22px)"><span>target</span></div></div>`;
+  const bars=(k,max,target,grad)=>`<div class="week">${ts.map(x=>{const a=anim('w'+k+x.d,r1(x[k]/max*100));const val=k==='hyd'?fmtVol(x[k]):fmt(x[k])+' cal',full=(()=>{const [y,m,dd]=x.d.split('-').map(Number);return new Date(y,m-1,dd).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})})();const diff=x[k]-target,amt=k==='hyd'?fmtVol(Math.abs(diff)):fmt(Math.abs(diff))+' cal',cmp=!x.n?'Nothing logged':!(target>0)?'':Math.abs(diff)<1?'Right on target':amt+(diff>0?' over':' under')+' target';
+    return`<button type="button" class="wcol ${x.d===cur?'cur':''}" data-act="openDay" data-d="${x.d}" data-tip="${esc(val)}|${esc(full)}|${esc(cmp)}" aria-label="${esc(full)}: ${esc(val)}. ${esc(cmp)}. Open this day."><div class="wbar" style="height:${a.from}%;background:${grad}" data-to="${a.to}" data-prop="h"></div><small aria-hidden="true">${wd(x.d)}</small></button>`}).join('')}<div class="tline" style="bottom:calc(${r1(target/max*100)}% * (150 - 26) / 150 + 22px)"><span>target</span></div></div>`;
   const ins=[];const wk=ts.reduce((a,x)=>a+x.kcal,0),wd2=ts.reduce((a,x)=>a+x.dkcal,0);
   ins.push(`You logged ${logged.length} of 7 days.`);
   if(logged.length){const ak=avg('kcal'),diff=ak-s.kcal;
@@ -929,9 +978,35 @@ function openAdd(){
       if(fd.get('keep')){it.id=uid();it.type='food';it.fav=false;it.uses=0;S.foods.push(it)}
       closeModal();addEntries([mkEntry(it,'food')],'Logged '+it.name)}})}
 
+/* label-serving version of a web product, for saving straight to the library ("Save as is") or filling a form */
+function offItem(x,kind){if(kind==='drink'){const ml=x.su==='ml'&&x.sq?r0(x.sq):x.drink?355:250,a=x.k100!=null,k=ml/100;
+    const it={name:x.name,ml,kcal:r1(a?x.k100*k:x.kS),p:r1(a?x.p100*k:x.pS),c:r1(a?x.c100*k:x.cS),f:r1(a?x.f100*k:x.fS),caf:r0(x.caf*k),hyd:x.abv>5?0:100,abv:alcOn()?r1(x.abv):0,src:'est'};it.alc=stdDrinks(it.ml,it.abv);return it}
+  const per=x.sq||x.k100==null,k=x.sq?x.sq/100:1,useS=per&&x.kS!=null;
+  return{name:x.name,serving:(per?(x.serving||(x.sq?r0(x.sq)+' g':'1 serving')):'100 g').slice(0,80),
+    kcal:r1(useS?x.kS:x.k100*k),p:r1(useS?x.pS:x.p100*k),c:r1(useS?x.cS:x.c100*k),f:r1(useS?x.fS:x.f100*k)}}
+/* web search panel for the New food / New drink forms */
+function offPanel(sh,kind,fill){const box=sh.querySelector('#offp');if(!box||!S.settings.offSearch)return;
+  const q=box.querySelector('#offq'),out=box.querySelector('#offr');let items=[];
+  const go=()=>{const s=q.value.trim();if(s.length<2){out.innerHTML='<p class="empty">Type at least 2 letters.</p>';return}const k=offQuery(s);
+    if(!offCache.has(k)){const w=offWait();if(w){out.innerHTML=`<p class="empty">You're searching fast! Brand search can handle about 10 searches a minute, so give it ${w} seconds and try again. You can still type the numbers in below.</p>`;return}}
+    out.innerHTML='<p class="empty">Searching brands…</p>';
+    offSearch(s).then(list=>{if(!q.isConnected)return;const want=kind==='drink';items=list.filter(offVisible).sort((a,b)=>(b.drink===want)-(a.drink===want));
+      out.innerHTML=items.length?items.slice(0,12).map((x,i)=>`<div class="offrow"><span class="info-b"><div class="name">${esc(x.name)}</div><div class="meta num">${offMeta(x)}<span class="dbtag">OFF</span></div></span>
+        <span class="offbtns"><button type="button" class="btn sm" data-ofill="${i}">Customize</button><button type="button" class="btn sm primary" data-osave="${i}">Save as is</button></span></div>`).join('')
+        :`<p class="empty">No brand match for “${esc(s)}”. Try the brand plus one word, or type it in from the label below.</p>`})
+      .catch(()=>{if(q.isConnected)out.innerHTML='<p class="empty">Brand search didn\'t answer. Check your connection, or type the numbers in below.</p>'})};
+  box.querySelector('#offgo').onclick=go;q.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();go()}};
+  out.onclick=e=>{const f=e.target.closest('[data-ofill]'),sv=e.target.closest('[data-osave]');
+    if(f){fill(offItem(items[+f.dataset.ofill],kind));box.open=false;toast('Filled in from Open Food Facts. Check it, then Save.')}
+    else if(sv){const it={id:uid(),uses:0,fav:true,...offItem(items[+sv.dataset.osave],kind)};if(kind==='food'){it.type='food';S.foods.push(it)}else S.drinks.push(it);
+      save();closeModal();render();toast('Saved '+it.name+'. It works offline now.')}}}
+const offPanelHTML=kind=>S.settings.offSearch?`<details class="qa offp" id="offp"><summary>Find it online (Open Food Facts)</summary>
+  <div class="offsearch"><label class="vh" for="offq">Search brands</label><input type="search" id="offq" placeholder="${kind==='drink'?'Pabst Blue Ribbon, Gatorade…':'Stouffer’s Swedish meatballs…'}" autocomplete="off"><button type="button" class="btn" id="offgo">Search</button></div>
+  <div id="offr"></div><p class="help">Customize fills in the form so you can change anything first. Save as is keeps a copy on this device, so it works with no internet.</p></details>`:'';
+
 function foodForm(id){const f=id?S.foods.find(x=>x.id===id):null;if(f&&f.recipe)return recipeForm(id);
   const v=f||{name:'',serving:'1 serving',kcal:'',p:'',c:'',f:'',fav:true};
-  modal(`<form id="ff"><h3>${f?'Edit food':'New food'}</h3>
+  modal(`<form id="ff"><h3>${f?'Edit food':'New food'}</h3>${f?'':offPanelHTML('food')}
     <label class="f" for="fn">Name</label><input type="text" id="fn" name="name" value="${esc(v.name)}" required autofocus>
     <label class="f" for="fs">Serving</label><input type="text" id="fs" name="serving" value="${esc(v.serving)}" placeholder="1 cup, 100 g, 1 bar">
     <div class="row"><div><label class="f" for="fk">Calories</label><input type="number" inputmode="decimal" id="fk" name="kcal" value="${v.kcal}" required min="0" step="any"></div>
@@ -945,11 +1020,12 @@ function foodForm(id){const f=id?S.foods.find(x=>x.id===id):null;if(f&&f.recipe)
     sh.querySelector('#ff').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
       const o={name:fv(fd,'name').trim(),serving:fv(fd,'serving').trim()||'1 serving',kcal:num(fv(fd,'kcal')),p:num(fv(fd,'p')),c:num(fv(fd,'c')),f:num(fv(fd,'fat')),fav:!!fd.get('fav'),...readTags(fd)};
       if(f)Object.assign(f,o);else S.foods.push({id:uid(),type:'food',uses:0,...o});save();closeModal();render();toast(f?'Saved changes':'Added '+o.name)};
-    const d=sh.querySelector('#del');if(d)d.onclick=()=>delItem(id,'foods')})}
+    const d=sh.querySelector('#del');if(d)d.onclick=()=>delItem(id,'foods');
+    if(!f)offPanel(sh,'food',it=>{const set=(n,v)=>{const el=sh.querySelector(`[name="${n}"]`);if(el)el.value=v};set('name',it.name);set('serving',it.serving);set('kcal',it.kcal);set('p',it.p);set('c',it.c);set('fat',it.f)})})}
 
 function drinkForm(id){const d=id?S.drinks.find(x=>x.id===id):null;
   const v=d||{name:'',ml:isOz()?r0(16*ML_OZ):500,kcal:0,p:0,c:0,f:0,caf:0,hyd:100,abv:0,fav:true};
-  modal(`<form id="df"><h3>${d?'Edit drink':'New drink'}</h3>
+  modal(`<form id="df"><h3>${d?'Edit drink':'New drink'}</h3>${d?'':offPanelHTML('drink')}
     <label class="f" for="dn">Name</label><input type="text" id="dn" name="name" value="${esc(v.name)}" required autofocus placeholder="My blue tumbler, Iced coffee">
     <div class="row"><div><label class="f" for="dml">Size (${uName()})</label><input type="number" inputmode="decimal" id="dml" name="ml" value="${r1(toUnit(v.ml))}" required min="0" step="any"></div>
     <div><label class="f" for="dk2">Calories</label><input type="number" inputmode="decimal" id="dk2" name="kcal" value="${v.kcal}" min="0" step="any"></div>
@@ -966,7 +1042,8 @@ function drinkForm(id){const d=id?S.drinks.find(x=>x.id===id):null;
     sh.querySelector('#df').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
       const o={name:fv(fd,'name').trim(),ml:r1(fromUnit(fv(fd,'ml'))),kcal:num(fv(fd,'kcal')),p:num(fv(fd,'p')),c:num(fv(fd,'c')),f:num(fv(fd,'fat')),caf:num(fv(fd,'caf')),hyd:num(fv(fd,'hyd')),abv:num(fv(fd,'abv')),fav:!!fd.get('fav'),...readTags(fd)};o.alc=stdDrinks(o.ml,o.abv);
       if(d)Object.assign(d,o);else S.drinks.push({id:uid(),uses:0,...o});save();closeModal();render();toast(d?'Saved changes':'Added '+o.name)};
-    const x=sh.querySelector('#del');if(x)x.onclick=()=>delItem(id,'drinks')})}
+    const x=sh.querySelector('#del');if(x)x.onclick=()=>delItem(id,'drinks');
+    if(!d)offPanel(sh,'drink',it=>{const set=(n,v)=>{const el=sh.querySelector(`[name="${n}"]`);if(el)el.value=v};set('name',it.name);set('ml',r1(toUnit(it.ml)));set('kcal',it.kcal);set('caf',it.caf);set('p',it.p);set('c',it.c);set('fat',it.f);set('hyd',it.hyd);set('abv',it.abv)})})}
 
 function delItem(id,col){const arr=S[col],i=arr.findIndex(x=>x.id===id);if(i<0)return;const [it]=arr.splice(i,1);save();closeModal();render();
   toast('Deleted '+it.name+'. Past log entries stay.',()=>{arr.splice(i,0,it);save();render()})}
@@ -1018,12 +1095,16 @@ function entryForm(id){const e=(S.log[cur]||[]).find(x=>x.id===id);if(!e)return;
     <div class="row"><div><label class="f" for="ep">Protein g</label><input type="number" inputmode="decimal" id="ep" name="p" value="${e.p}" min="0" step="any"></div>
     <div><label class="f" for="ec">Carbs g</label><input type="number" inputmode="decimal" id="ec" name="c" value="${e.c}" min="0" step="any"></div>
     <div><label class="f" for="efat">Fat g</label><input type="number" inputmode="decimal" id="efat" name="fat" value="${e.f}" min="0" step="any"></div></div>
+    ${!(e.ref&&findItem(e.ref))?`<label class="check"><input type="checkbox" name="keepOwn"> Save as my own ${dr?'drink':'food'} with these numbers (one serving)</label>`:''}
     ${dr?`<div class="row"><div><label class="f" for="ecaf">Caffeine mg</label><input type="number" inputmode="decimal" id="ecaf" name="caf" value="${e.caf}" min="0" step="any"></div><div><label class="f" for="eh">Hydration %</label><input type="number" inputmode="decimal" id="eh" name="hyd" value="${e.hyd}" min="0" step="any"></div></div>`:''}
     <div class="actions"><button type="button" class="btn danger" id="del">Remove</button><span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary">Save</button></div></form>`,sh=>{
     sh.querySelector('#ef').onsubmit=ev=>{ev.preventDefault();const fd=new FormData(ev.target);
       Object.assign(e,{name:fv(fd,'name').trim(),qty:num(fv(fd,'qty'))||1,kcal:num(fv(fd,'kcal')),p:num(fv(fd,'p')),c:num(fv(fd,'c')),f:num(fv(fd,'fat'))});
       if(dr)Object.assign(e,{ml:r1(fromUnit(fv(fd,'ml'))),caf:num(fv(fd,'caf')),hyd:num(fv(fd,'hyd'))});
-      const tm=fv(fd,'time');if(tm){const [y,m,d]=cur.split('-').map(Number),[hh,mm]=tm.split(':').map(Number);e.t=new Date(y,m-1,d,hh,mm).getTime()}save();closeModal();render();toast('Saved')};
+      let saved='';if(fd.get('keepOwn')){const it={id:uid(),name:e.name,kcal:e.kcal,p:e.p,c:e.c,f:e.f,fav:true,uses:1,last:Date.now()};
+        if(dr){Object.assign(it,{ml:e.ml,caf:e.caf,hyd:e.hyd,abv:e.ml>0&&e.alc>0?r1(e.alc*STD_G/0.789/e.ml*100):0,alc:e.alc||0,src:'est'});S.drinks.push(it)}
+        else{Object.assign(it,{type:'food',serving:e.unit||'1 serving'});S.foods.push(it)}e.ref=it.id;saved=' and added to your '+(dr?'drinks':'foods')}
+      const tm=fv(fd,'time');if(tm){const [y,m,d]=cur.split('-').map(Number),[hh,mm]=tm.split(':').map(Number);e.t=new Date(y,m-1,d,hh,mm).getTime()}save();closeModal();render();toast('Saved'+saved)};
     sh.querySelector('#del').onclick=()=>{closeModal();removeEntry(id)}})}
 
 /* ---------- data in/out (SUITE-STANDARDS §5, addendum "Import/export" and "Save location") ----------
@@ -1146,6 +1227,7 @@ function shareWeek(){const s=S.settings,days=[...Array(7)].map((_,i)=>shift(cur,
 /* ---------- events ---------- */
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act,id=b.dataset.id;
   switch(a){
+    case 'openDay':if(chartTip.firstTap())break;if(DAY_RE.test(b.dataset.d||'')){chartTip.hide();cur=b.dataset.d;view='today';render();scrollTo(0,0)}break;
     case 'prev':cur=shift(cur,-1);render();break;
     case 'next':cur=shift(cur,1);render();break;
     case 'today':cur=todayKey();render();break;

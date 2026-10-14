@@ -2,6 +2,14 @@
 
 Newest first. One entry per release, in plain words a user would understand.
 
+## 1.4 · 2026-10-14
+
+- Brand results can be edited before you log them: open "Edit name or numbers", fix anything, and save it as your own food or drink. Your changes scale when you change the amount.
+- Logged something that isn't in your library (from brand search, the food database or quick calories)? Edit the entry and tick "Save as my own" to keep it.
+- New food and New drink have "Find it online": search Open Food Facts, then Customize (fills in the form so you can change it) or Save as is (keeps a copy on this device, so it works with no internet).
+- The BAC chart has a new look in the app's green: a soft gradient, a pulsing "now" dot, the peak marked, and the projected part shown faded and dashed.
+- The Week bars are interactive: hover, tap or tab to a day to see its total and how far it was from your target, then click (or tap again) to open that day. The calorie ring, macro bars and water glass on Today show their numbers the same way.
+
 ## 1.3 · 2026-10-14
 
 - Brand search: when you log food, tap **Search brands online** to find packaged and restaurant products (like Pabst Blue Ribbon or Stouffer's Swedish Meatballs) from Open Food Facts, a free volunteer database. Pick one, choose how much, and it's saved to your foods or drinks so it's instant and works offline next time.
