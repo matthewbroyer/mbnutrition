@@ -2,8 +2,8 @@
    Network-first for the app's own files, cache as the offline fallback. Never touches user data
    (localStorage / IndexedDB are not involved), never intercepts non-GET or cross-origin requests.
    BUMP VERSION ON EVERY RELEASE so old cached files are dropped. */
-const VERSION = 'mbnutrition-20261014-v1-4';
-const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'mb-suite-core.css', 'mb-suite-cutouts.css', 'mb-suite-sidebar.css', 'mb-suite-v3.css', 'mb-suite-topbar.css', 'mb-title.js', 'mb-install.js', 'mb-share.js', 'app.js', 'privacy.html', 'terms.html', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'foods-db.json'];
+const VERSION = 'mbnutrition-20261014-v1-5';
+const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'mb-suite-core.css?v=1.5', 'mb-suite-cutouts.css?v=1.5', 'mb-suite-sidebar.css?v=1.5', 'mb-suite-v3.css?v=1.5', 'mb-suite-topbar.css?v=1.5', 'mb-title.js?v=1.5', 'mb-install.js?v=1.5', 'mb-share.js?v=1.5', 'app.js?v=1.5', 'privacy.html', 'terms.html', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'foods-db.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -19,7 +19,7 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;            // nothing cross-origin is cached
   e.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })   // always ask the server, so a new release shows on the next load
       .then(res => { if (res.ok && res.type === 'basic') { const copy = res.clone(); caches.open(VERSION).then(c => c.put(req, copy)); } return res; })
       .catch(() => caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then(r => r || (req.mode === 'navigate' ? caches.match('index.html') : undefined)))
   );

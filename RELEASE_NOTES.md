@@ -2,6 +2,13 @@
 
 Newest first. One entry per release, in plain words a user would understand.
 
+## 1.5 · 2026-10-14
+
+- Editing a log entry now ends with a "Your library" choice: change only this entry, also update the saved food or drink, or save it as a new one in your library.
+- The live "now" marker on the BAC chart is a clean ring with a soft glow, and it stays round at any screen width.
+- Week charts say "Hover or tap a bar" so it's clear they're interactive.
+- New releases now show up on the next page load: the app always checks the server for its files instead of using an old copy.
+
 ## 1.4 · 2026-10-14
 
 - Brand results can be edited before you log them: open "Edit name or numbers", fix anything, and save it as your own food or drink. Your changes scale when you change the amount.

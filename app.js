@@ -1,6 +1,6 @@
 "use strict";
 const KEY='mbnutrition.v1',OLD_KEYS=['mbcalories.v1','fuel.v1'], ML_OZ=29.5735;
-const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.4',released:'2026-10-14',firstYear:2026};
+const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.5',released:'2026-10-14',firstYear:2026};
 const THEME_KEY='mbnutrition.theme', SEEN_KEY='mbnutrition.seen', HANDLE_DB='mbnutrition.files';
 const $=s=>document.querySelector(s);
 const uid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5)};
@@ -808,8 +808,8 @@ function trendsHTML(){
   return `<div class="viewhead"><h2><span>7 days to ${esc(prettyDate(cur))}</span></h2>${dayNav()}</div>
   ${logged.length>=3?`<div class="milestone" style="margin:0 0 12px"><span><b>${logged.length} of 7 days logged.</b> Share a summary of your week as an image; calorie numbers stay off unless you turn them on.</span><button type="button" class="btn sm mb-share-btn" data-act="shareWeek">${ICON('share',16)}Share week</button></div>`:''}
   <div class="grid">
-    <section class="card"><h2><span>Calories · 7 days to ${prettyDate(cur)}</span></h2>${bars('kcal',kMax,s.kcal,'linear-gradient(var(--food-2),var(--food))')}</section>
-    <section class="card"><h2><span>Hydration counted</span></h2>${bars('hyd',hMax,s.waterMl,'linear-gradient(var(--water-2),var(--water))')}</section>
+    <section class="card"><h2><span>Calories · 7 days to ${prettyDate(cur)}</span><span class="charthint">Hover or tap a bar</span></h2>${bars('kcal',kMax,s.kcal,'linear-gradient(var(--food-2),var(--food))')}</section>
+    <section class="card"><h2><span>Hydration counted</span><span class="charthint">Hover or tap a bar</span></h2>${bars('hyd',hMax,s.waterMl,'linear-gradient(var(--water-2),var(--water))')}</section>
     ${S.settings.supps&&(S.supps||[]).length?(()=>{const days=[...Array(7)].map((_,i)=>shift(cur,i-6)),rows=(S.supps||[]).map(x=>{let due=0,tk=0;days.forEach(d=>{if(x.active!==false&&!(x.created&&d<x.created)&&x.days.includes(dow(d)))x.slots.forEach(sl=>{due++;if(taken(d,x.id,sl))tk++})});return[x,due,tk]}).filter(r=>r[1]);
       return rows.length?`<section class="card"><h2><span>Supplements · 7 days</span></h2>${rows.map(([x,due,tk])=>`<div class="fastlog num"><span>${esc(x.name)}</span><b>${tk}/${due} · ${r0(tk/due*100)}%</b></div>`).join('')}</section>`:''})():''}
     <section class="card"><h2><span>What the week says</span></h2><ul class="insights">${ins.map(i=>`<li>${i}</li>`).join('')}</ul></section>
@@ -1086,7 +1086,7 @@ function recipeForm(id){const ex=id?S.foods.find(x=>x.id===id):null;
     const d=sh.querySelector('#del');if(d)d.onclick=()=>delItem(id,'foods')})}
 
 function entryForm(id){const e=(S.log[cur]||[]).find(x=>x.id===id);if(!e)return;const dr=e.kind==='drink';
-  modal(`<form id="ef"><h3>Edit entry</h3><p class="help">Changes only this entry, not the saved item.</p>
+  modal(`<form id="ef"><h3>Edit entry</h3><p class="help">Edits this log entry. At the bottom, choose whether your library changes too.</p>
     <label class="f" for="en">Name</label><input type="text" id="en" name="name" value="${esc(e.name)}" required>
     <div class="row"><div><label class="f" for="eq">Servings</label><input type="number" inputmode="decimal" id="eq" name="qty" value="${e.qty}" min="0.25" step="0.25" required></div>
     ${dr?`<div><label class="f" for="eml">Size each (${uName()})</label><input type="number" inputmode="decimal" id="eml" name="ml" value="${r1(toUnit(e.ml))}" min="0" step="any"></div>`:''}
@@ -1095,13 +1095,19 @@ function entryForm(id){const e=(S.log[cur]||[]).find(x=>x.id===id);if(!e)return;
     <div class="row"><div><label class="f" for="ep">Protein g</label><input type="number" inputmode="decimal" id="ep" name="p" value="${e.p}" min="0" step="any"></div>
     <div><label class="f" for="ec">Carbs g</label><input type="number" inputmode="decimal" id="ec" name="c" value="${e.c}" min="0" step="any"></div>
     <div><label class="f" for="efat">Fat g</label><input type="number" inputmode="decimal" id="efat" name="fat" value="${e.f}" min="0" step="any"></div></div>
-    ${!(e.ref&&findItem(e.ref))?`<label class="check"><input type="checkbox" name="keepOwn"> Save as my own ${dr?'drink':'food'} with these numbers (one serving)</label>`:''}
     ${dr?`<div class="row"><div><label class="f" for="ecaf">Caffeine mg</label><input type="number" inputmode="decimal" id="ecaf" name="caf" value="${e.caf}" min="0" step="any"></div><div><label class="f" for="eh">Hydration %</label><input type="number" inputmode="decimal" id="eh" name="hyd" value="${e.hyd}" min="0" step="any"></div></div>`:''}
+    ${(()=>{const lib=e.ref&&findItem(e.ref),w=dr?'drink':'food';
+      return`<fieldset class="libsave"><legend>Your library</legend>
+        <label class="check"><input type="radio" name="libMode" value="" checked> Change only this entry</label>
+        ${lib?`<label class="check"><input type="radio" name="libMode" value="update"> Also update my saved ${w} “${esc(lib.name)}”</label>`:''}
+        <label class="check"><input type="radio" name="libMode" value="new"> Save as ${lib?'a new':'my own'} ${w} in my library</label></fieldset>`})()}
     <div class="actions"><button type="button" class="btn danger" id="del">Remove</button><span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary">Save</button></div></form>`,sh=>{
     sh.querySelector('#ef').onsubmit=ev=>{ev.preventDefault();const fd=new FormData(ev.target);
       Object.assign(e,{name:fv(fd,'name').trim(),qty:num(fv(fd,'qty'))||1,kcal:num(fv(fd,'kcal')),p:num(fv(fd,'p')),c:num(fv(fd,'c')),f:num(fv(fd,'fat'))});
       if(dr)Object.assign(e,{ml:r1(fromUnit(fv(fd,'ml'))),caf:num(fv(fd,'caf')),hyd:num(fv(fd,'hyd'))});
-      let saved='';if(fd.get('keepOwn')){const it={id:uid(),name:e.name,kcal:e.kcal,p:e.p,c:e.c,f:e.f,fav:true,uses:1,last:Date.now()};
+      let saved='';const mode=fd.get('libMode');
+      if(mode==='update'){const lib=findItem(e.ref);if(lib){Object.assign(lib,{name:e.name,kcal:e.kcal,p:e.p,c:e.c,f:e.f});if(dr)Object.assign(lib,{ml:e.ml,caf:e.caf,hyd:e.hyd});else if(e.unit)lib.serving=e.unit;saved=' and updated '+lib.name}}
+      if(mode==='new'){const it={id:uid(),name:e.name,kcal:e.kcal,p:e.p,c:e.c,f:e.f,fav:true,uses:1,last:Date.now()};
         if(dr){Object.assign(it,{ml:e.ml,caf:e.caf,hyd:e.hyd,abv:e.ml>0&&e.alc>0?r1(e.alc*STD_G/0.789/e.ml*100):0,alc:e.alc||0,src:'est'});S.drinks.push(it)}
         else{Object.assign(it,{type:'food',serving:e.unit||'1 serving'});S.foods.push(it)}e.ref=it.id;saved=' and added to your '+(dr?'drinks':'foods')}
       const tm=fv(fd,'time');if(tm){const [y,m,d]=cur.split('-').map(Number),[hh,mm]=tm.split(':').map(Number);e.t=new Date(y,m-1,d,hh,mm).getTime()}save();closeModal();render();toast('Saved'+saved)};
