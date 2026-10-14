@@ -1,6 +1,6 @@
 "use strict";
 const KEY='mbnutrition.v1',OLD_KEYS=['mbcalories.v1','fuel.v1'], ML_OZ=29.5735;
-const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.1',released:'2026-10-14',firstYear:2026};
+const APP={domain:'mbnutrition.online',short:'Nutrition',version:'1.3',released:'2026-10-14',firstYear:2026};
 const THEME_KEY='mbnutrition.theme', SEEN_KEY='mbnutrition.seen', HANDLE_DB='mbnutrition.files';
 const $=s=>document.querySelector(s);
 const uid=()=>{try{if(crypto.randomUUID)return crypto.randomUUID()}catch(e){}return Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-5)};
@@ -55,7 +55,7 @@ function defaultFoods(){const F=(id,name,serving,kcal,p,c,f)=>({id,type:'food',n
   F('f_broccoli','Broccoli, raw','1 cup (91 g)',31,2.5,6,0.4),
   F('f_cheddar','Cheddar cheese','1 oz (28 g)',113,6.4,1,9.3)]}
 function defaults(){return{v:2,
-  settings:{kcal:2000,p:140,c:200,f:65,waterMl:r0(64*ML_OZ),unit:'oz',caffeine:true,alcohol:true,cafLimit:400,lastBackup:0,weightKg:null,sex:'m',fasting:false,fastGoal:16,winStart:'',winEnd:'',allergens:[],avoidWords:'',hideAllergens:false,diet:[],style:'',supps:true},
+  settings:{kcal:2000,p:140,c:200,f:65,waterMl:r0(64*ML_OZ),unit:'oz',caffeine:true,alcohol:true,cafLimit:400,lastBackup:0,weightKg:null,sex:'m',fasting:false,fastGoal:16,winStart:'',winEnd:'',allergens:[],avoidWords:'',hideAllergens:false,diet:[],style:'',supps:true,offSearch:true},
   foods:defaultFoods(),drinks:defaultDrinks(),log:{},template:null,supps:[],suppLog:{}}}
 function migrate(d){
   if((d.v||1)<2){const nd=defaultDrinks(),byId=Object.fromEntries(nd.map(x=>[x.id,x]));
@@ -88,7 +88,7 @@ function normalize(d){const b=defaults(),s={...b.settings,...(isObj(d.settings)?
   ['kcal','p','c','f','waterMl','cafLimit','lastBackup'].forEach(k=>s[k]=nn(s[k]));
   s.fastGoal=Math.max(1,Math.min(23.75,num(s.fastGoal)||16));s.unit=pick(s.unit,['oz','ml'],'oz');s.sex=pick(s.sex,['m','f','a'],'m');
   s.weightKg=s.weightKg==null||s.weightKg===''?null:(nn(s.weightKg)||null);
-  ['caffeine','alcohol','fasting','hideAllergens','supps','fastCustom','recDismissed'].forEach(k=>{if(k in s)s[k]=!!s[k]});
+  ['caffeine','alcohol','fasting','hideAllergens','supps','fastCustom','recDismissed','offSearch'].forEach(k=>{if(k in s)s[k]=!!s[k]});
   s.winStart=HM_RE.test(s.winStart)?s.winStart:'';s.winEnd=HM_RE.test(s.winEnd)?s.winEnd:'';
   s.allergens=Array.isArray(s.allergens)?s.allergens.filter(k=>k in ALLERGENS):[];s.diet=Array.isArray(s.diet)?s.diet.filter(k=>k in DIETS):[];
   s.style=s.style in STYLES?s.style:'';s.avoidWords=str(s.avoidWords,300);
@@ -142,7 +142,11 @@ function entryMeta(e){const bits=[];
   return bits.join(' · ')}
 function itemMeta(it,kind){return kind==='drink'?fmtVol(it.ml)+' · '+fmt(it.kcal)+' cal'+(num(it.abv)>0?' · '+it.abv+'%':''):fmt(it.kcal)+' cal · '+r0(it.p)+'g P'}
 const isAlc=d=>num(d.abv)>0||num(d.alc)>0;
-const visDrinks=()=>S.drinks.filter(d=>S.settings.alcohol||!isAlc(d));
+/* under 21 (US drinking age): every alcohol feature, drink and database entry is hidden, whatever the toggle says */
+const under21=()=>{const a=S.settings.profile&&num(S.settings.profile.age);return a>0&&a<21};
+const alcOn=()=>!!S.settings.alcohol&&!under21();
+const isAlcDB=name=>/^alcoholic beverage/i.test(name);
+const visDrinks=()=>S.drinks.filter(d=>alcOn()||!isAlc(d));
 const r2=n=>Math.round(n*100)/100;
 
 /* ---------- actions ---------- */
@@ -176,7 +180,7 @@ const WIDMARK_R={m:0.68,f:0.55,a:0.615}, BETA=0.015 /* %BAC eliminated per hour 
 function alcEvents(){const now=Date.now(),from=now-24*36e5,ev=[],oldest=shift(todayKey(),-2);
   Object.keys(S.log).forEach(k=>{if(k<oldest)return;S.log[k].forEach(e=>{if(e.kind==='drink'&&e.alc>0&&e.t>=from&&e.t<=now+6e4)ev.push({t:e.t,g:e.alc*STD_G*e.qty})})});
   return ev.sort((a,b)=>a.t-b.t)}
-function bacCurve(){const s=S.settings;if(!s.alcohol||!s.weightKg)return null;const ev=alcEvents();if(!ev.length)return null;
+function bacCurve(){const s=S.settings;if(!alcOn()||!s.weightKg)return null;const ev=alcEvents();if(!ev.length)return null;
   const k=100/(s.weightKg*1000*(WIDMARK_R[s.sex]||WIDMARK_R.m)),elim=BETA/60,now=Date.now(),t0=ev[0].t,pts=[];
   let bac=0,t=t0,nowBac=0,peak={v:0,t:t0},zeroAt=null;
   for(let i=0;i<60*72;i++){let add=0,absorbing=false;
@@ -187,7 +191,7 @@ function bacCurve(){const s=S.settings;if(!s.alcohol||!s.weightKg)return null;co
     t+=6e4}
   return{now:nowBac,peak,zeroAt,pts,t0}}
 const clock=t=>new Date(t).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-function bacSection(){const s=S.settings;if(!s.alcohol)return'';const c=bacCurve();
+function bacSection(){const s=S.settings;if(!alcOn())return'';const c=bacCurve();
   if(c&&c.now>0)return bacHTML(c);
   if(!s.weightKg){const ev=alcEvents();if(ev.length&&Date.now()-ev[ev.length-1].t<12*36e5)
     return`<section class="card span2 bac" id="baccard"><h2><span>Estimated BAC</span></h2><p class="empty" style="margin:0">Add your body weight in Settings to see a live BAC estimate.</p><div class="dayacts"><button type="button" class="btn" data-act="tab" data-v="settings">Add your weight</button></div></section>`}
@@ -202,10 +206,10 @@ function bacHTML(c){bacLast=c;const W=320,H=70,t1=c.zeroAt||c.pts[c.pts.length-1
       <div class="hydsub num">${c.peak.t>Date.now()?'Still rising · ':''}Peak ${c.peak.v.toFixed(3)}% at ${clock(c.peak.t)}${c.zeroAt?' · back to 0.000% around '+clock(c.zeroAt):''}</div></div>
       <div class="bacplot" tabindex="0" role="img" aria-label="BAC estimate over time. Hover, drag or use the arrow keys to read the estimate at any time.">
       <svg class="bacspark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-        <polygon points="0,${H-4} ${line} ${X(t1)},${H-4}" style="fill:var(--mf);fill-opacity:.15"/>
-        <polyline points="${line}" style="fill:none;stroke:var(--mf)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
+        <polygon points="0,${H-4} ${line} ${X(t1)},${H-4}" style="fill:var(--bac);fill-opacity:.15"/>
+        <polyline points="${line}" style="fill:none;stroke:var(--bac)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
         <line x1="${nx}" x2="${nx}" y1="0" y2="${H}" style="stroke:var(--ink)" stroke-opacity=".35" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
-        <circle cx="${nx}" cy="${Y(c.now)}" r="4" style="fill:var(--mf)"/></svg>
+        <circle cx="${nx}" cy="${Y(c.now)}" r="4" style="fill:var(--bac)"/></svg>
       <div class="bacx" hidden></div><div class="bacdot" hidden></div><div class="bactip num" hidden aria-live="polite"></div>
       <div class="bacaxis num"><span>${clock(c.t0)}</span><span>${clock(t1)}</span></div></div></div>
     <p class="help">Rough Widmark estimate from your weight, body type and drink times. Food, pace, medications and your own body change real BAC a lot. Never use this to decide whether to drive. <button type="button" class="link" data-act="sources">How it's calculated</button></p></section>`}
@@ -334,6 +338,76 @@ function dbForm(i){const [name,cat,kcal,p,c,f,usda]=DB.foods[i];let unit=isOz()?
       if(fd.get('keep')){it.id=uid();it.type='food';it.fav=true;it.uses=0;S.foods.push(it)}
       closeModal();addEntries([mkEntry(it,'food')],'Logged '+name)}})}
 
+/* ---------- brand search: Open Food Facts (ODbL, openfoodfacts.org) ----------
+   Runs only when the user taps "Search brands online"; sends just the typed words.
+   OFF allows about 10 searches a minute per person, so we stop at 9 and say so kindly. */
+const OFF_FIELDS='code,product_name,product_name_en,generic_name,brands,quantity,serving_size,serving_quantity,serving_quantity_unit,nutriments,categories_tags';
+const OFF_ALIAS={pbr:'pabst blue ribbon',bud:'budweiser','bud light':'bud light',stouffers:"stouffer's",'stouffer s':"stouffer's",'mac n cheese':'macaroni cheese',oreos:'oreo'};
+const OFF_MAX=9,offCache=new Map();let offTimes=[];
+const offQuery=q=>{const k=q.toLowerCase().trim().replace(/\s+/g,' ');return OFF_ALIAS[k]||k};
+const offWait=()=>{const now=Date.now();offTimes=offTimes.filter(t=>now-t<6e4);return offTimes.length<OFF_MAX?0:Math.ceil((offTimes[0]+6e4-now)/1000)};
+function offFetch(url,ms=12000){const ac=typeof AbortController!=='undefined'?new AbortController():null,tm=ac&&setTimeout(()=>ac.abort(),ms);
+  return fetch(url,{signal:ac&&ac.signal,credentials:'omit',referrerPolicy:'no-referrer'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}).finally(()=>tm&&clearTimeout(tm))}
+function offSearch(q){const k=offQuery(q),hit=offCache.get(k);if(hit&&Date.now()-hit.t<15*6e4)return Promise.resolve(hit.items);
+  offTimes.push(Date.now());const e=encodeURIComponent(k);
+  return offFetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${e}&search_simple=1&action=process&json=1&page_size=30&sort_by=unique_scans_n&fields=${OFF_FIELDS}`)
+    .then(j=>j.products||[])
+    .catch(()=>offFetch(`https://search.openfoodfacts.org/search?q=${e}&page_size=30&fields=${OFF_FIELDS}`).then(j=>j.hits||j.products||[]))
+    .then(list=>{const seen=new Set(),items=list.map(offParse).filter(x=>{if(!x)return false;const key=x.name.toLowerCase()+'|'+r0(x.k100||x.kS);if(seen.has(key))return false;seen.add(key);return true}).slice(0,20);
+      offCache.set(k,{t:Date.now(),items});return items})}
+const txt1=v=>(Array.isArray(v)?v.join(', '):typeof v==='string'?v:isObj(v)?(v.en||Object.values(v)[0]||''):'').trim();
+function offParse(p){if(!isObj(p))return null;const n=isObj(p.nutriments)?p.nutriments:{};
+  let name=txt1(p.product_name_en)||txt1(p.product_name)||txt1(p.generic_name);if(!name)return null;
+  const brand=txt1(p.brands).split(',')[0].trim();if(brand&&!name.toLowerCase().includes(brand.toLowerCase()))name=brand+' '+name;name=name.slice(0,120);
+  const sq=num(p.serving_quantity),su=String(p.serving_quantity_unit||'').toLowerCase(),cats=Array.isArray(p.categories_tags)?p.categories_tags:[];
+  const v=(k,suf)=>{const x=n[k+suf];return x==null||x===''?null:num(x)};
+  let k100=v('energy-kcal','_100g');if(k100==null&&v('energy','_100g')!=null)k100=v('energy','_100g')/4.184;
+  let kS=v('energy-kcal','_serving');if(kS==null&&v('energy','_serving')!=null)kS=v('energy','_serving')/4.184;
+  if(k100==null&&kS!=null&&sq>0)k100=kS/sq*100;if(kS==null&&k100!=null&&sq>0)kS=k100*sq/100;
+  if(k100==null&&kS==null)return null;
+  const mac=(k)=>{let a=v(k,'_100g'),b=v(k,'_serving');if(a==null&&b!=null&&sq>0)a=b/sq*100;if(b==null&&a!=null&&sq>0)b=a*sq/100;return[a||0,b||0]};
+  const [p100,pS]=mac('proteins'),[c100,cS]=mac('carbohydrates'),[f100,fS]=mac('fat');
+  const qty=txt1(p.quantity).toLowerCase(),alcCat=cats.includes('en:alcoholic-beverages');
+  const drink=cats.includes('en:beverages')||alcCat||su==='ml'||/\d\s*(ml|cl|l|fl\.?\s*oz)\b/.test(qty);
+  let abv=num(n.alcohol_100g??n.alcohol??0);if(abv>95)abv=0;
+  const alc=abv>0||alcCat||(/\b(beer|lager|wine|vodka|whiske?y|bourbon|tequila|liqueur|hard cider|hard seltzer|ipa|stout)\b/i.test(name)&&!/root beer|ginger beer|birch beer|non.?alcoholic|alcohol.?free|0\.0/i.test(name));
+  let caf=num(n.caffeine_100g);caf=caf>0?(caf<1?caf*1000:caf):0;   /* OFF stores caffeine in g; a few entries are already in mg */
+  return{code:String(p.code||''),name,serving:txt1(p.serving_size).slice(0,60),sq:sq>0?sq:0,su,k100,kS,p100,c100,f100,pS,cS,fS,drink,alc,abv:alc&&!abv?5:abv,caf}}
+const offVisible=x=>(alcOn()||!x.alc)&&!(S.settings.hideAllergens&&flagged(allergenInfo(null,x.name)));
+function offMeta(x){const per=x.drink?'100 ml':'100 g';return x.k100!=null?`${fmt(x.k100)} cal · ${r1(x.p100)}g P per ${per}`:`${fmt(x.kS)} cal per serving`}
+function offForm(x){const unitsF=[...(x.sq||x.k100==null?[['srv','servings']]:[]),...(x.k100!=null?[['g','grams'],['oz','oz']]:[])];
+  const link=x.code?`<a href="https://world.openfoodfacts.org/product/${encodeURIComponent(x.code)}" target="_blank" rel="noopener noreferrer">Open Food Facts${EXT}</a>`:'Open Food Facts';
+  const w=allergenInfo(null,x.name);
+  modal(`<form id="offf"><h3>${esc(x.name)}</h3>
+    <p class="help">From ${link}, where volunteers add products. Check it against the label: you can fix the numbers before saving.${x.serving?' Serving on the label: '+esc(x.serving)+'.':''}</p>
+    ${flagged(w)?`<div class="warnbox"><b>⚠ ${esc(warnText(w))}.</b> Based on the name only. Check the package.</div>`:''}
+    <div class="row"><div style="grid-column:span 2"><label class="f" for="amt">How much</label><input type="number" inputmode="decimal" id="amt" name="amt" min="0" step="any" required autofocus></div>
+    <div><label class="f" for="au">Unit</label><select id="au" name="unit">${x.drink&&x.k100!=null?`<option value="ml">ml</option><option value="floz">fl oz</option>`:''}${x.drink&&x.k100!=null?'':unitsF.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}${x.drink&&x.sq?'<option value="srv">servings</option>':''}</select></div></div>
+    <div class="amts" id="amts"></div><div class="sum num" id="dsum"></div>
+    <label class="check"><input type="checkbox" name="keep" checked> Save to my ${x.drink?'drinks':'foods'} so it's instant next time</label>
+    <div class="actions"><span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary">Log it</button></div></form>`,sh=>{
+    const amt=sh.querySelector('#amt'),au=sh.querySelector('#au'),box=sh.querySelector('#amts'),sum=sh.querySelector('#dsum');
+    /* base = grams or ml; servings use the label serving size, or the per-serving numbers when that is all we have */
+    const base=()=>{const a=num(amt.value);return au.value==='oz'?a*28.3495:au.value==='floz'?a*ML_OZ:au.value==='srv'?(x.sq?a*x.sq:0):a};
+    const vals=()=>{if(au.value==='srv'&&!x.sq){const a=num(amt.value);return{kcal:x.kS*a,p:x.pS*a,c:x.cS*a,f:x.fS*a}}
+      const g=base()/100;return{kcal:x.k100*g,p:x.p100*g,c:x.c100*g,f:x.f100*g}};
+    const calc=()=>{const o=vals();sum.innerHTML=`<b>${fmt(o.kcal)} cal</b> · ${r1(o.p)}g P · ${r1(o.c)}g C · ${r1(o.f)}g F`+(base()?` <span style="color:var(--muted)">(${fmt(base())} ${x.drink?'ml':'g'})</span>`:'')+(x.drink&&x.abv&&alcOn()?` · ${r1(x.abv)}% alcohol`:'')};
+    const chips=()=>{const u=au.value,list=u==='srv'?[0.5,1,1.5,2]:u==='oz'?[1,2,3,4,6,8]:u==='floz'?[8,12,16,20]:u==='ml'?[250,330,355,500]:[30,50,100,150,200,250];
+      box.innerHTML=list.map(v=>`<button type="button" data-amt="${v}">${v} ${u==='srv'?'serv.':u==='floz'?'fl oz':u}</button>`).join('')};
+    const start=()=>{const u=au.value;amt.value=u==='srv'?1:u==='ml'?(x.sq&&x.su==='ml'?r0(x.sq):355):u==='floz'?(x.sq&&x.su==='ml'?r1(x.sq/ML_OZ):12):u==='oz'?4:(x.sq&&x.su!=='ml'?r0(x.sq):100)};
+    if(x.drink&&x.k100!=null)au.value=isOz()?'floz':'ml';else if(x.sq)au.value='srv';else if(x.k100!=null)au.value=isOz()?'oz':'g';
+    start();chips();calc();
+    amt.oninput=calc;au.onchange=()=>{start();chips();calc()};
+    box.onclick=e=>{const v=e.target.dataset.amt;if(v){amt.value=v;calc()}};
+    sh.querySelector('#offf').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target),o=vals();if(!(num(amt.value)>0))return;
+      const label=au.value==='srv'?`${r1(num(amt.value))} serving${num(amt.value)===1?'':'s'}`+(x.serving?` (${x.serving})`:''):`${r1(num(amt.value))} ${au.value==='floz'?'fl oz':au.value}`;
+      let it,kind;
+      if(x.drink){kind='drink';const ml=r0(base()||(x.sq||355));
+        it={name:x.name,ml,kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f),caf:r0(x.caf*ml/100),hyd:x.abv>5?0:100,abv:alcOn()?r1(x.abv):0,src:'est'};it.alc=stdDrinks(it.ml,it.abv)}
+      else{kind='food';it={name:x.name,serving:label.slice(0,80),kcal:r1(o.kcal),p:r1(o.p),c:r1(o.c),f:r1(o.f)}}
+      if(fd.get('keep')){it.id=uid();it.fav=true;it.uses=0;if(kind==='food'){it.type='food';S.foods.push(it)}else S.drinks.push(it)}
+      closeModal();addEntries([mkEntry(it,kind)],'Logged '+x.name)}})}
+
 /* ---------- allergies & intolerances ----------
    Matching is by food NAME only (the database has no ingredient lists), so it flags "may contain".
    Tags the user sets on their own foods count as confirmed. No warning never means safe. */
@@ -423,8 +497,8 @@ function bodySVG(kind){const P={ectomorph:{S:15,C:13,W:11,H:12,a:5,l:8},mesomorp
   const torso=`M${cx-5},30 L${cx-Sh},42 L${cx-C},60 L${cx-W},86 L${cx-H},106 L${cx},112 L${cx+H},106 L${cx+W},86 L${cx+C},60 L${cx+Sh},42 L${cx+5},30 Z`;
   const arm=d=>`<line x1="${cx+d*(Sh-a/2+1)}" y1="44" x2="${cx+d*(Sh+5)}" y2="106" stroke-width="${a}"/>`,leg=d=>`<line x1="${cx+d*H*0.5}" y1="108" x2="${cx+d*(H*0.5+3)}" y2="186" stroke-width="${l}"/>`;
   return`<svg class="body" viewBox="0 0 100 196" aria-hidden="true"><g fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="16" r="11" stroke="none"/><path d="${torso}" stroke-width="4"/>${arm(-1)}${arm(1)}${leg(-1)}${leg(1)}</g></svg>`}
-const splitLegend=p=>`<span class="split num">${[['p','Protein','var(--mp)'],['c','Carbs','var(--mc)'],['f','Fat','var(--mf)']].map(([k,l,col])=>`<span><b style="color:${col}">${p[k]}%</b><em>${l}</em></span>`).join('')}</span>`;
-const mbar=p=>`<div class="mbar" aria-hidden="true"><i style="width:${p.p}%;background:var(--mp)"></i><i style="width:${p.c}%;background:var(--mc)"></i><i style="width:${p.f}%;background:var(--accent)" class="cu-bar"></i></div>`;
+const splitLegend=p=>`<span class="split num">${[['p','Protein','var(--mp-t)'],['c','Carbs','var(--mc-t)'],['f','Fat','var(--mf-t)']].map(([k,l,col])=>`<span><b style="color:${col}">${p[k]}%</b><em>${l}</em></span>`).join('')}</span>`;
+const mbar=p=>`<div class="mbar" aria-hidden="true"><i style="width:${p.p}%;background:var(--mp)"></i><i style="width:${p.c}%;background:var(--mc)"></i><i style="width:${p.f}%;background:var(--mf)"></i></div>`;
 const unitSys=()=>isOz()?'imperial':'metric';
 function prof(){const s=S.settings,p=s.profile||(s.profile={});
   if(typeof p.activity==='string')p.activity={sed:1.2,light:1.375,mod:1.55,very:1.725,extra:1.9}[p.activity]||1.375;
@@ -521,7 +595,7 @@ function tips(){const s=S.settings,t=totals(cur),out=[],h=new Date().getHours()+
     if(pick)out.push(`<div class="tip"><span>${r0(pLeft)} g protein to go. ${esc(pick.name)} adds ${r0(pick.p)} g for ${fmt(pick.kcal)} cal.</span>${logBtn(pick)}</div>`)}
   if(t.dkcal>=200&&t.kcal>0&&t.dkcal/t.kcal>=0.2)out.push(`<div class="tip"><span>Drinks are ${r0(t.dkcal/t.kcal*100)}% of today's calories (${fmt(t.dkcal)} cal).</span></div>`);
   if(s.caffeine&&t.caf>=s.cafLimit*0.8)out.push(`<div class="tip"><span>Caffeine is at ${fmt(t.caf)} of your ${s.cafLimit} mg guide${h>=14?'. Caffeine late in the day can affect sleep':''}.</span></div>`);
-  if(s.alcohol&&t.alc>=2)out.push(`<div class="tip"><span>A glass of water between drinks helps keep your hydration on track.</span>${logBtn(water)}</div>`);
+  if(alcOn()&&t.alc>=2)out.push(`<div class="tip"><span>A glass of water between drinks helps keep your hydration on track.</span>${logBtn(water)}</div>`);
   return out.slice(0,3)}
 
 /* ---------- sources ---------- */
@@ -535,11 +609,12 @@ const SOURCES=[
   ['Low-carb & keto','Feinman RD et al. Dietary carbohydrate restriction as the first approach in diabetes management: critical review and evidence base. Nutrition, 2015.','https://doi.org/10.1016/j.nut.2014.06.011','Low-carb is under 130 g or 26% of calories from carbs; very-low-carb (keto) is 20–50 g or under 10%. The app uses 20% and 5% carb splits.'],
   ['Protein check','Jäger R et al. International Society of Sports Nutrition position stand: protein and exercise, 2017.','https://pubmed.ncbi.nlm.nih.gov/28642676/','1.4–2.0 g protein per kg per day for people who exercise. The app shows your protein in g/kg and notes when an active profile falls under 1.2.'],
   ['Caffeine guide','U.S. FDA. Spilling the Beans: How Much Caffeine Is Too Much?','https://www.fda.gov/consumers/consumer-updates/spilling-beans-how-much-caffeine-too-much','400 mg a day is not generally associated with negative effects for most adults.'],
+  ['Brand foods','Open Food Facts, a free, open database of packaged foods added by volunteers. Data under the Open Database License (ODbL).','https://world.openfoodfacts.org','Used only when you tap Search brands online. Numbers come from product labels as entered by volunteers, so check them against the package.'],
   ['Standard drinks','NIAAA. What Is a Standard Drink?','https://www.niaaa.nih.gov/alcohols-effects-health/what-standard-drink','One U.S. standard drink is 14 g of pure alcohol: 12 oz beer at 5%, 5 oz wine at 12%, or 1.5 oz of 80-proof spirits.'],
   ['Allergens','U.S. FDA. Food Allergies: What You Need to Know (the 9 major allergens).','https://www.fda.gov/food/buy-store-serve-safe-food/food-allergies-what-you-need-know','Milk, eggs, fish, crustacean shellfish, tree nuts, peanuts, wheat, soybeans and sesame. Gluten and lactose are included here as common intolerances. Warnings are name matches, not ingredient checks.'],
   ['BAC estimate','Widmark formula; elimination rate from the Wisconsin Department of Justice Alcohol Monograph.','https://www.wisdoj.gov/Forensic%20Science/Alcohol%20Monograph-37306-1.pdf','BAC = alcohol ÷ (body weight × 0.68 for men or 0.55 for women), minus about 0.015% per hour (typical range 0.010–0.025). Each drink is assumed to absorb over 45 minutes.']];
 const EXT='<svg class="ext" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-ext"/></svg><span class="vh"> (opens in a new tab)</span>';
-function sourcesHTML(){return`<section class="card span2" id="sources"><h2><span>Sources & methods</span></h2><ul class="srcs">${SOURCES.map(([k,t,u,d])=>`<li><small>${esc(k)}</small><a href="${u}" target="_blank" rel="noopener noreferrer">${esc(t)}${EXT}</a><br>${esc(d)}</li>`).join('')}</ul>
+function sourcesHTML(){return`<section class="card span2" id="sources"><h2><span>Sources & methods</span></h2><ul class="srcs">${SOURCES.filter(([k])=>alcOn()||!/drinks|BAC/.test(k)).map(([k,t,u,d])=>`<li><small>${esc(k)}</small><a href="${u}" target="_blank" rel="noopener noreferrer">${esc(t)}${EXT}</a><br>${esc(d)}</li>`).join('')}</ul>
   <p class="empty">Every number in this app is an estimate. Labels, portions, cooking and your own body all shift the real values.</p></section>`}
 const FAQ=[
   ['Where is my log saved?','In this browser on this device, and nowhere else. There is no account and nothing is uploaded. Clearing your browser data deletes it, so use Data → Save backup now every so often.'],
@@ -549,7 +624,7 @@ const FAQ=[
   ['Where do the food numbers come from?','About 7,200 foods come from the USDA FoodData Central SR Legacy database and about 560 from the TempoLife dataset. Values are per 100 g; you pick the amount. Details are under Sources & methods below.'],
   ['Is this medical or diet advice?','No. Targets, hydration, fasting and BAC figures are general estimates. Ask a doctor or registered dietitian before changing how you eat, and never use the BAC estimate to decide whether to drive.']];
 function helpHTML(){return`<div class="grid">
-  <section class="card span2 faq"><h2><span>Questions</span></h2>${FAQ.map(([q,a])=>`<details><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
+  <section class="card span2 faq"><h2><span>Questions</span></h2>${FAQ.map(([q,a])=>`<details><summary>${esc(q)}</summary><p>${esc(alcOn()?a:a.replace(', fasting and BAC figures',' and fasting figures').replace(', and never use the BAC estimate to decide whether to drive',''))}</p></details>`).join('')}</section>
   ${sourcesHTML()}</div>`}
 
 /* ---------- views ---------- */
@@ -611,7 +686,7 @@ function todayHTML(){
           <div class="stat"><small>All drinks</small><b>${fmtVol(t.ml)}</b></div>
           <div class="stat"><small>Drink cal</small><b>${fmt(t.dkcal)}</b></div>
           ${s.caffeine?`<div class="stat"><small>Caffeine</small><b>${fmt(t.caf)}</b> <small style="display:inline">/ ${s.cafLimit} mg</small></div>`:''}
-          ${s.alcohol?`<div class="stat"><small>Alcohol</small><b>${r1(t.alc)}</b> <small style="display:inline" title="U.S. standard drinks, 14 g of alcohol each">drinks</small></div>`:''}
+          ${alcOn()?`<div class="stat"><small>Alcohol</small><b>${r1(t.alc)}</b> <small style="display:inline" title="U.S. standard drinks, 14 g of alcohol each">drinks</small></div>`:''}
         </div>
       </div>
     </div>
@@ -743,8 +818,10 @@ function settingsHTML(){const s=S.settings;
     <label class="toggle">Track supplements<input type="checkbox" data-set="supps" ${s.supps?'checked':''}></label>
     <label class="toggle">Track caffeine<input type="checkbox" data-set="caffeine" ${s.caffeine?'checked':''}></label>
     ${s.caffeine?`<div class="row" style="margin-bottom:6px">${n('cafLimit','Caffeine guide mg',s.cafLimit)}</div>`:''}
-    <label class="toggle">Track alcohol<input type="checkbox" data-set="alcohol" ${s.alcohol?'checked':''}></label>
-    ${s.alcohol?`<p class="empty">The BAC estimate uses your weight and sex from About you and appears on Today only while it's above 0.000%. Turning alcohol off hides beer, wine and spirits everywhere.</p>`:''}
+    <label class="toggle">Search brands online<input type="checkbox" data-set="offSearch" ${s.offSearch?'checked':''}></label>
+    ${s.offSearch?`<p class="empty">Adds a "Search brands online" button when you log food. Only when you tap it, the words you typed go to Open Food Facts, a free volunteer database of packaged foods. Nothing else from your log is sent.</p>`:''}
+    ${under21()?'':`<label class="toggle">Track alcohol<input type="checkbox" data-set="alcohol" ${s.alcohol?'checked':''}></label>`}
+    ${alcOn()?`<p class="empty">The BAC estimate uses your weight and sex from About you and appears on Today only while it's above 0.000%. Turning alcohol off hides beer, wine and spirits everywhere.</p>`:''}
   </section>
   <section class="card span2"><h2><span>Dietary preferences</span></h2>
     <label class="f">Foods to flag</label><div class="tagchks">${Object.entries(DIETS).map(([k,[l]])=>`<label><input type="checkbox" data-set="diet:${k}" ${(s.diet||[]).includes(k)?'checked':''}> ${l}</label>`).join('')}</div>
@@ -820,15 +897,29 @@ function openAdd(){
     const row=(it,kind)=>`<button type="button" class="res" data-act="logClose" data-id="${it.id}"><span class="dot" style="background:${kind==='drink'?'var(--water)':'var(--food)'}"></span><span class="info-b"><div class="name">${esc(it.name)}</div><div class="meta num">${kind==='food'?esc(it.serving)+' · ':''}${itemMeta(it,kind)}</div>${warnSpan(allergenInfo(it))}</span><span class="plus">+</span></button>`;
     const hide=it=>S.settings.hideAllergens&&flagged(allergenInfo(it));
     const kindOf=it=>S.drinks.includes(it)?'drink':'food';
+    let off={q:'',st:'',items:[]};   /* brand search state for this sheet */
+    const offHTML=s=>{if(!S.settings.offSearch||s.length<2)return'';const mine=off.q===offQuery(s);let body='';
+      if(mine&&off.st==='load')body='<p class="empty">Searching brands…</p>';
+      else if(mine&&off.st==='err')body=`<p class="empty">Brand search didn't answer. Check your connection and <button type="button" class="link" data-off="go">try again</button>.</p>`;
+      else if(mine&&off.st==='wait')body=`<p class="empty">You're searching fast! Brand search can handle about 10 searches a minute, so give it ${off.wait} seconds and <button type="button" class="link" data-off="go">try again</button>. Your saved foods and the food database below still work right away.</p>`;
+      else if(mine&&off.st==='ok'){const v=off.items.filter(offVisible);body=v.length?v.map((x,i)=>`<button type="button" class="res" data-off="pick" data-i="${off.items.indexOf(x)}"><span class="dot" style="background:${x.drink?'var(--water)':'var(--mp)'}"></span><span class="info-b"><div class="name">${esc(x.name)}</div><div class="meta num">${offMeta(x)}<span class="dbtag">OFF</span></div>${warnSpan(allergenInfo(null,x.name))}</span><span class="plus">›</span></button>`).join(''):`<p class="empty">No brand match for “${esc(s)}”. Try the brand plus one word, like “stouffers meatballs”, or add it from the label with + New food.</p>`}
+      else body=`<button type="button" class="btn sm" data-off="go" style="margin:4px 0 8px">${ICON('search',16)}Search brands online for “${esc(s.length>40?s.slice(0,40)+'…':s)}”</button>`;
+      return'<div class="grp">Brands · Open Food Facts</div>'+body};
+    const runOff=()=>{const s=q.value.trim();if(s.length<2)return;const k=offQuery(s);
+      if(!offCache.has(k)){const w=offWait();if(w){off={q:k,st:'wait',wait:w,items:[]};draw();return}}
+      off={q:k,st:'load',items:[]};draw();
+      offSearch(s).then(items=>{if(off.q===k){off={q:k,st:'ok',items};if(q.isConnected)draw()}}).catch(()=>{if(off.q===k){off={q:k,st:'err',items:[]};if(q.isConnected)draw()}})};
+    res.addEventListener('click',e=>{const b=e.target.closest('[data-off]');if(!b)return;e.preventDefault();
+      if(b.dataset.off==='go')runOff();else if(b.dataset.off==='pick'){const x=off.items[+b.dataset.i];if(x)offForm(x)}});
     const draw=()=>{const s=q.value.trim().toLowerCase();
       if(!s){const seen=new Set(),rec=[];for(let i=0;i<30&&rec.length<10;i++){const d=S.log[shift(todayKey(),-i)]||[];
-          [...d].sort((a,b)=>b.t-a.t).forEach(e=>{if(e.ref&&!seen.has(e.ref)&&rec.length<10){const it=findItem(e.ref);if(it&&(S.settings.alcohol||!isAlc(it))){seen.add(e.ref);rec.push(it)}}})}
+          [...d].sort((a,b)=>b.t-a.t).forEach(e=>{if(e.ref&&!seen.has(e.ref)&&rec.length<10){const it=findItem(e.ref);if(it&&(alcOn()||!isAlc(it))){seen.add(e.ref);rec.push(it)}}})}
         const fav=sorted([...S.foods,...visDrinks()]).filter(it=>!seen.has(it.id)&&!hide(it)).slice(0,12);
         res.innerHTML=(rec.length?'<div class="grp">Recent</div>'+rec.map(it=>row(it,kindOf(it))).join(''):'')+'<div class="grp">Your library</div>'+fav.map(it=>row(it,kindOf(it))).join('')}
       else{const vs=variants(s),m=sorted([...S.foods,...visDrinks()]).map(it=>[hide(it)?null:nameScore(it.name,vs),it]).filter(x=>x[0]!=null).sort((a,b)=>a[0]-b[0]).map(x=>x[1]);
-        const dbh=searchDB(s,S.settings.hideAllergens?200:30).filter(i=>!S.settings.hideAllergens||!flagged(allergenInfo(null,DB.foods[i][0]))).slice(0,30);
-        res.innerHTML=(m.length?'<div class="grp">Your foods & drinks</div>'+m.map(it=>row(it,kindOf(it))).join(''):'')
-          +'<div class="grp">Food database</div>'+(DB?(dbh.length?dbh.map(i=>{const r=DB.foods[i];return`<button type="button" class="res" data-act="dbPick" data-i="${i}"><span class="dot" style="background:var(--mc)"></span><span class="info-b"><div class="name">${esc(r[0])}</div><div class="meta num">${r[2]} cal · ${r[3]}g P per 100 g<span class="dbtag">${r[6]?'USDA':'TL'}</span></div>${warnSpan(allergenInfo(null,r[0]))}</span><span class="plus">›</span></button>`}).join('')
+        const dbh=searchDB(s,S.settings.hideAllergens||!alcOn()?200:30).filter(i=>(alcOn()||!isAlcDB(DB.foods[i][0]))&&(!S.settings.hideAllergens||!flagged(allergenInfo(null,DB.foods[i][0])))).slice(0,30);
+        res.innerHTML=(m.length?'<div class="grp">Your foods & drinks</div>'+m.map(it=>row(it,kindOf(it))).join(''):'')+offHTML(q.value.trim())
+          +'<div class="grp">Food database</div>'+(DB?(dbh.length?dbh.map(i=>{const r=DB.foods[i];return`<button type="button" class="res" data-act="dbPick" data-i="${i}"><span class="dot" style="background:var(--mf)"></span><span class="info-b"><div class="name">${esc(r[0])}</div><div class="meta num">${r[2]} cal · ${r[3]}g P per 100 g<span class="dbtag">${r[6]?'USDA':'TL'}</span></div>${warnSpan(allergenInfo(null,r[0]))}</span><span class="plus">›</span></button>`}).join('')
             :`<p class="empty">No database match for “${esc(q.value)}”. Try fewer words, or use quick calories below.</p>`)
             :dbErr?'<p class="empty">The food database didn\'t load. Check your connection and reopen this.</p>':'<p class="empty">Loading food database…</p>')}};
     q.oninput=draw;draw();loadDB().then(()=>{if(q.isConnected&&q.value.trim())draw()}).catch(()=>{dbErr=true;if(q.isConnected)draw()});
@@ -867,8 +958,8 @@ function drinkForm(id){const d=id?S.drinks.find(x=>x.id===id):null;
     <div><label class="f" for="dc">Carbs g</label><input type="number" inputmode="decimal" id="dc" name="c" value="${v.c||0}" min="0" step="any"></div>
     <div><label class="f" for="dfat">Fat g</label><input type="number" inputmode="decimal" id="dfat" name="fat" value="${v.f||0}" min="0" step="any"></div></div>
     <div class="row"><div><label class="f" for="dh">Counts toward hydration %</label><input type="number" inputmode="decimal" id="dh" name="hyd" value="${v.hyd}" min="0" max="200" step="any"></div>
-    ${S.settings.alcohol?`<div><label class="f" for="da">Alcohol % (ABV)</label><input type="number" inputmode="decimal" id="da" name="abv" value="${num(v.abv)}" min="0" max="95" step="any"></div>`:`<input type="hidden" name="abv" value="${num(v.abv)}">`}</div>
-    <p class="help">Hydration % is how much of the drink counts toward your meter compared with water. ${v.src==='bhi'?'This default comes from the Beverage Hydration Index study (Maughan et al., 2016): milk, orange juice and oral rehydration drinks held on to more fluid than water; coffee, tea, soda, sports drinks and lager were about the same as water.':v.src==='est'?'This default is an estimate, not a measured value.':'Use 100 for most non-alcoholic drinks.'} Wine, spirits and cocktails default to 0% because stronger alcohol increases urine output.</p>
+    ${alcOn()?`<div><label class="f" for="da">Alcohol % (ABV)</label><input type="number" inputmode="decimal" id="da" name="abv" value="${num(v.abv)}" min="0" max="95" step="any"></div>`:`<input type="hidden" name="abv" value="${num(v.abv)}">`}</div>
+    <p class="help">Hydration % is how much of the drink counts toward your meter compared with water. ${v.src==='bhi'?'This default comes from the Beverage Hydration Index study (Maughan et al., 2016): milk, orange juice and oral rehydration drinks held on to more fluid than water; coffee, tea, soda, sports drinks and lager were about the same as water.':v.src==='est'?'This default is an estimate, not a measured value.':'Use 100 for most non-alcoholic drinks.'}${alcOn()?' Wine, spirits and cocktails default to 0% because stronger alcohol increases urine output.':''}</p>
     ${tagBlock(v)}
     <label class="check"><input type="checkbox" name="fav" ${v.fav?'checked':''}> Pin to quick add</label>
     <div class="actions">${d?'<button type="button" class="btn danger" id="del">Delete</button>':''}<span class="sp"></span><button type="button" class="btn" data-x>Cancel</button><button class="btn primary">Save</button></div></form>`,sh=>{

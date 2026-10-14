@@ -2,6 +2,18 @@
 
 Newest first. One entry per release, in plain words a user would understand.
 
+## 1.3 · 2026-10-14
+
+- Brand search: when you log food, tap **Search brands online** to find packaged and restaurant products (like Pabst Blue Ribbon or Stouffer's Swedish Meatballs) from Open Food Facts, a free volunteer database. Pick one, choose how much, and it's saved to your foods or drinks so it's instant and works offline next time.
+- Drinks found this way count toward hydration (and alcohol, if you track it). Under 21, alcohol products don't show.
+- Brand search only runs when you tap the button, and only sends what you typed. You can turn it off in Settings. The privacy page explains it.
+- If you search very quickly (about 10 searches in a minute), the app asks you to wait a few seconds. Your saved foods and the built-in database keep working.
+
+## 1.2 · 2026-10-14
+
+- If your age in Settings is under 21, everything about alcohol is hidden: beer, wine and spirits in your drinks and in food search, the alcohol total, the BAC chart, the Track alcohol switch and the alcohol notes on the Help page. Drinks you already logged stay in your history.
+- New macro colors shared with mbmealprep: protein red, carbs blue, fat gold. The fat part of the split bar now shows its own color instead of green.
+
 ## 1.1 · 2026-10-14
 
 - Food search understands everyday names now: "coke", "pepsi", "pop", "oj", "hot dog", "fries", "donut", "mac and cheese" and many more find the right foods. Plurals, small typos ("chiken", "brocoli") and half-typed words work too, and the most common pick (whole milk, a whole egg, brewed coffee) comes first.

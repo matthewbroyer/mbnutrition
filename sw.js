@@ -2,7 +2,7 @@
    Network-first for the app's own files, cache as the offline fallback. Never touches user data
    (localStorage / IndexedDB are not involved), never intercepts non-GET or cross-origin requests.
    BUMP VERSION ON EVERY RELEASE so old cached files are dropped. */
-const VERSION = 'mbnutrition-20261014-v1-1';
+const VERSION = 'mbnutrition-20261014-v1-3';
 const SHELL = ['./', 'index.html', 'manifest.json', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'mb-suite-core.css', 'mb-suite-cutouts.css', 'mb-suite-sidebar.css', 'mb-suite-v3.css', 'mb-suite-topbar.css', 'mb-title.js', 'mb-install.js', 'mb-share.js', 'app.js', 'privacy.html', 'terms.html', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png', 'foods-db.json'];
 
 self.addEventListener('install', e => {
